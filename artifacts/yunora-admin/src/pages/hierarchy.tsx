@@ -38,6 +38,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ExamCombobox, type ExamOption } from '@/components/exam-combobox';
 import {
   Dialog,
   DialogContent,
@@ -125,6 +126,13 @@ function BoardsTab({ onSelectBoard }: { onSelectBoard: (id: number) => void }) {
   const [code, setCode] = useState('');
   const [description, setDescription] = useState('');
 
+  const boardsAsOptions: ExamOption[] = (data?.data ?? []).map((b) => ({
+    id: b.id,
+    name: b.name,
+    code: b.code,
+    description: b.description ?? undefined,
+  }));
+
   const handleDelete = (id: number) => {
     deleteBoard.mutate({ id }, {
       onSuccess: () => {
@@ -158,17 +166,53 @@ function BoardsTab({ onSelectBoard }: { onSelectBoard: (id: number) => void }) {
     );
   };
 
+  /** Called when user picks a preset that isn't in the DB yet — auto-create it */
+  const handleSelectPreset = (preset: Omit<ExamOption, 'id'>) => {
+    createBoard.mutate(
+      { data: { name: preset.name, code: preset.code, description: preset.description } },
+      {
+        onSuccess: (res) => {
+          toast({ title: `${preset.name} added!` });
+          queryClient.invalidateQueries({ queryKey: getListBoardsQueryKey() });
+          if (res?.data?.id) onSelectBoard(res.data.id);
+        },
+        onError: (err) => {
+          toast({ variant: 'destructive', title: 'Failed to add exam', description: err.message });
+        },
+      }
+    );
+  };
+
+  /** Called when user types a new name that doesn't match any preset */
+  const handleCustomCreate = (customName: string) => {
+    setName(customName);
+    setCode(customName.toUpperCase().replace(/\s+/g, '-').slice(0, 20));
+    setDescription('');
+    setDialogOpen(true);
+  };
+
   return (
     <>
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Boards</CardTitle>
-            <CardDescription>Top-level educational bodies. Click a board to drill into its standards.</CardDescription>
+        <CardHeader>
+          <div className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Exam Boards</CardTitle>
+              <CardDescription>Select an existing exam or add a new one. Click a row to manage its standards.</CardDescription>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => { setName(''); setCode(''); setDescription(''); setDialogOpen(true); }}>
+              <Plus className="mr-2 h-4 w-4" /> Custom
+            </Button>
           </div>
-          <Button size="sm" onClick={() => setDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" /> Add Board
-          </Button>
+          <div className="pt-2">
+            <ExamCombobox
+              existingBoards={boardsAsOptions}
+              onCreateFromPreset={handleSelectPreset}
+              onCreateCustom={handleCustomCreate}
+              onSelectExisting={(board) => board.id && onSelectBoard(board.id)}
+              disabled={createBoard.isPending}
+            />
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? <Skeleton className="h-64 w-full" /> : (
