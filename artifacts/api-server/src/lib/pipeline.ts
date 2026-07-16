@@ -111,8 +111,8 @@ export const QUALITY = {
   minOverall:           8.7,
   minSingleAxis:        6.0,
   minMicroTopics:       3,
-  maxRetries:           1,
-  maxStage1Retries:     1,
+  maxRetries:           3,
+  maxStage1Retries:     2,
   duplicateThreshold:   0.72,
 };
 
