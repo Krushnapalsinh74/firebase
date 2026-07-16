@@ -1,0 +1,10 @@
+# Ignore common files
+.gcloudignore
+.git
+.gitignore
+
+# Ignore node_modules because Cloud Functions installs them on the server
+node_modules/
+
+# Do NOT ignore compiled files (dist/)
+!dist/

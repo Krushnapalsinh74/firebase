@@ -1,0 +1,1571 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: Yunora AI Question Generation Admin Panel API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Authentication
+  - name: boards
+    description: Educational boards
+  - name: standards
+    description: Standards (grades/classes)
+  - name: subjects
+    description: Subjects
+  - name: chapters
+    description: Chapters
+  - name: topics
+    description: Topics
+  - name: questionTypes
+    description: Question types
+  - name: questions
+    description: Generated questions library
+  - name: generation
+    description: AI question generation
+  - name: aiProviders
+    description: AI provider management
+  - name: papers
+    description: Generated papers / PDF export
+  - name: analytics
+    description: Analytics and reporting
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  # ── AUTH ─────────────────────────────────────────────────────────────────────
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Admin login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResult"
+        "401":
+          description: Invalid credentials
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  # ── BOARDS ───────────────────────────────────────────────────────────────────
+  /boards:
+    get:
+      operationId: listBoards
+      tags: [boards]
+      summary: List all boards
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: List of boards
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BoardList"
+    post:
+      operationId: createBoard
+      tags: [boards]
+      summary: Create a board
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BoardInput"
+      responses:
+        "201":
+          description: Created board
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Board"
+
+  /boards/{id}:
+    get:
+      operationId: getBoard
+      tags: [boards]
+      summary: Get board by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Board
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Board"
+    patch:
+      operationId: updateBoard
+      tags: [boards]
+      summary: Update board
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BoardUpdate"
+      responses:
+        "200":
+          description: Updated board
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Board"
+    delete:
+      operationId: deleteBoard
+      tags: [boards]
+      summary: Delete board
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  # ── STANDARDS ────────────────────────────────────────────────────────────────
+  /standards:
+    get:
+      operationId: listStandards
+      tags: [standards]
+      summary: List standards
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: boardId
+          in: query
+          schema: { type: integer }
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: List of standards
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardList"
+    post:
+      operationId: createStandard
+      tags: [standards]
+      summary: Create a standard
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StandardInput"
+      responses:
+        "201":
+          description: Created standard
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Standard"
+
+  /standards/{id}:
+    patch:
+      operationId: updateStandard
+      tags: [standards]
+      summary: Update standard
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StandardUpdate"
+      responses:
+        "200":
+          description: Updated standard
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Standard"
+    delete:
+      operationId: deleteStandard
+      tags: [standards]
+      summary: Delete standard
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  # ── SUBJECTS ─────────────────────────────────────────────────────────────────
+  /subjects:
+    get:
+      operationId: listSubjects
+      tags: [subjects]
+      summary: List subjects
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: standardId
+          in: query
+          schema: { type: integer }
+        - name: boardId
+          in: query
+          schema: { type: integer }
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: List of subjects
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubjectList"
+    post:
+      operationId: createSubject
+      tags: [subjects]
+      summary: Create a subject
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubjectInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subject"
+
+  /subjects/{id}:
+    patch:
+      operationId: updateSubject
+      tags: [subjects]
+      summary: Update subject
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubjectUpdate"
+      responses:
+        "200":
+          description: Updated subject
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subject"
+    delete:
+      operationId: deleteSubject
+      tags: [subjects]
+      summary: Delete subject
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  # ── CHAPTERS ─────────────────────────────────────────────────────────────────
+  /chapters:
+    get:
+      operationId: listChapters
+      tags: [chapters]
+      summary: List chapters
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: subjectId
+          in: query
+          schema: { type: integer }
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: syllabus
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: List of chapters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChapterList"
+    post:
+      operationId: createChapter
+      tags: [chapters]
+      summary: Create a chapter
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChapterInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Chapter"
+
+  /chapters/syllabus-categories:
+    get:
+      operationId: listChapterSyllabusCategories
+      tags: [chapters]
+      summary: List unique syllabus categories
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
+  /chapters/{id}:
+    patch:
+      operationId: updateChapter
+      tags: [chapters]
+      summary: Update chapter
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChapterUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Chapter"
+    delete:
+      operationId: deleteChapter
+      tags: [chapters]
+      summary: Delete chapter
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  # ── TOPICS ───────────────────────────────────────────────────────────────────
+  /topics:
+    get:
+      operationId: listTopics
+      tags: [topics]
+      summary: List topics
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: chapterId
+          in: query
+          schema: { type: integer }
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: List of topics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopicList"
+    post:
+      operationId: createTopic
+      tags: [topics]
+      summary: Create a topic
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TopicInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Topic"
+
+  /topics/{id}:
+    patch:
+      operationId: updateTopic
+      tags: [topics]
+      summary: Update topic
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TopicUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Topic"
+    delete:
+      operationId: deleteTopic
+      tags: [topics]
+      summary: Delete topic
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  # ── QUESTION TYPES ───────────────────────────────────────────────────────────
+  /question-types:
+    get:
+      operationId: listQuestionTypes
+      tags: [questionTypes]
+      summary: List question types
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of question types
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/QuestionType"
+
+  # ── QUESTIONS LIBRARY ────────────────────────────────────────────────────────
+  /questions:
+    get:
+      operationId: listQuestions
+      tags: [questions]
+      summary: List questions with filters
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: boardId
+          in: query
+          schema: { type: integer }
+        - name: standardId
+          in: query
+          schema: { type: integer }
+        - name: subjectId
+          in: query
+          schema: { type: integer }
+        - name: chapterId
+          in: query
+          schema: { type: integer }
+        - name: topicId
+          in: query
+          schema: { type: integer }
+        - name: difficulty
+          in: query
+          schema: { type: string, enum: [easy, medium, hard, advanced] }
+        - name: questionType
+          in: query
+          schema: { type: string }
+        - name: model
+          in: query
+          schema: { type: string }
+        - name: dateFrom
+          in: query
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          schema: { type: string, format: date }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: Paginated questions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuestionList"
+
+  /questions/{id}:
+    get:
+      operationId: getQuestion
+      tags: [questions]
+      summary: Get a single question
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Question
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Question"
+    patch:
+      operationId: updateQuestion
+      tags: [questions]
+      summary: Edit a question
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuestionUpdate"
+      responses:
+        "200":
+          description: Updated question
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Question"
+    delete:
+      operationId: deleteQuestion
+      tags: [questions]
+      summary: Delete a question
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  # ── AI GENERATION ─────────────────────────────────────────────────────────────
+  /generation/start:
+    post:
+      operationId: startGeneration
+      tags: [generation]
+      summary: Start AI question generation job
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerationRequest"
+      responses:
+        "202":
+          description: Job started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerationJob"
+
+  /generation/jobs:
+    get:
+      operationId: listGenerationJobs
+      tags: [generation]
+      summary: List generation jobs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: Generation jobs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerationJobList"
+
+  /generation/jobs/{jobId}:
+    get:
+      operationId: getGenerationJob
+      tags: [generation]
+      summary: Get generation job status and results
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Job details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerationJobDetail"
+
+  # ── AI PROVIDERS ──────────────────────────────────────────────────────────────
+  /ai-providers:
+    get:
+      operationId: listAiProviders
+      tags: [aiProviders]
+      summary: List AI providers
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of providers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AiProvider"
+    post:
+      operationId: createAiProvider
+      tags: [aiProviders]
+      summary: Add a new AI provider
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiProviderInput"
+      responses:
+        "201":
+          description: Created provider
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiProvider"
+
+  /ai-providers/{id}:
+    patch:
+      operationId: updateAiProvider
+      tags: [aiProviders]
+      summary: Update AI provider
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiProviderUpdate"
+      responses:
+        "200":
+          description: Updated provider
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiProvider"
+    delete:
+      operationId: deleteAiProvider
+      tags: [aiProviders]
+      summary: Delete AI provider
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /ai-providers/{id}/test:
+    post:
+      operationId: testAiProvider
+      tags: [aiProviders]
+      summary: Test an AI provider connection
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Test result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProviderTestResult"
+
+  # ── PAPERS ────────────────────────────────────────────────────────────────────
+  /papers:
+    get:
+      operationId: listPapers
+      tags: [papers]
+      summary: List generated papers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: Papers list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaperList"
+    post:
+      operationId: createPaper
+      tags: [papers]
+      summary: Create a paper from selected questions
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaperInput"
+      responses:
+        "201":
+          description: Created paper
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Paper"
+
+  /papers/{id}/export:
+    post:
+      operationId: exportPaper
+      tags: [papers]
+      summary: Export paper as PDF
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: PDF export URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportResult"
+
+  # ── ANALYTICS ─────────────────────────────────────────────────────────────────
+  /analytics/dashboard:
+    get:
+      operationId: getDashboardStats
+      tags: [analytics]
+      summary: Get dashboard summary statistics
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /analytics/questions-by-subject:
+    get:
+      operationId: getQuestionsBySubject
+      tags: [analytics]
+      summary: Questions grouped by subject
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Breakdown by subject
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SubjectCount"
+
+  /analytics/questions-by-difficulty:
+    get:
+      operationId: getQuestionsByDifficulty
+      tags: [analytics]
+      summary: Questions grouped by difficulty
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Breakdown by difficulty
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DifficultyCount"
+
+  /analytics/model-usage:
+    get:
+      operationId: getModelUsage
+      tags: [analytics]
+      summary: AI model usage statistics
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Model usage stats
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ModelUsage"
+
+  /analytics/recent-activity:
+    get:
+      operationId: getRecentActivity
+      tags: [analytics]
+      summary: Recent generation activity
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+
+  /analytics/monthly-report:
+    get:
+      operationId: getMonthlyReport
+      tags: [analytics]
+      summary: Monthly generation report (last 12 months)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Monthly report
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MonthlyReport"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status: { type: string }
+      required: [status]
+
+    # ── AUTH ──────────────────────────────────────────────────────────────────
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+
+    AuthResult:
+      type: object
+      required: [token, user]
+      properties:
+        token: { type: string }
+        user:
+          $ref: "#/components/schemas/User"
+
+    User:
+      type: object
+      required: [id, email, role, name]
+      properties:
+        id: { type: integer }
+        email: { type: string }
+        name: { type: string }
+        role: { type: string, enum: [admin, viewer] }
+        createdAt: { type: string, format: date-time }
+
+    # ── BOARDS ────────────────────────────────────────────────────────────────
+    Board:
+      type: object
+      required: [id, name, code]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        code: { type: string }
+        description: { type: ["string", "null"] }
+        isActive: { type: boolean }
+        standardsCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+
+    BoardInput:
+      type: object
+      required: [name, code]
+      properties:
+        name: { type: string }
+        code: { type: string }
+        description: { type: string }
+        isActive: { type: boolean, default: true }
+
+    BoardUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        code: { type: string }
+        description: { type: string }
+        isActive: { type: boolean }
+
+    BoardList:
+      type: object
+      required: [data, total, page, limit]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Board"
+        total: { type: integer }
+        page: { type: integer }
+        limit: { type: integer }
+
+    # ── STANDARDS ─────────────────────────────────────────────────────────────
+    Standard:
+      type: object
+      required: [id, name, boardId]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        level: { type: integer }
+        boardId: { type: integer }
+        boardName: { type: ["string", "null"] }
+        isActive: { type: boolean }
+        subjectsCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+
+    StandardInput:
+      type: object
+      required: [name, boardId, level]
+      properties:
+        name: { type: string }
+        level: { type: integer }
+        boardId: { type: integer }
+        isActive: { type: boolean, default: true }
+
+    StandardUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        level: { type: integer }
+        isActive: { type: boolean }
+
+    StandardList:
+      type: object
+      required: [data, total, page, limit]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Standard"
+        total: { type: integer }
+        page: { type: integer }
+        limit: { type: integer }
+
+    # ── SUBJECTS ──────────────────────────────────────────────────────────────
+    Subject:
+      type: object
+      required: [id, name, standardId]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        code: { type: ["string", "null"] }
+        standardId: { type: integer }
+        standardName: { type: ["string", "null"] }
+        boardId: { type: integer }
+        boardName: { type: ["string", "null"] }
+        isActive: { type: boolean }
+        chaptersCount: { type: integer }
+        questionsCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+
+    SubjectInput:
+      type: object
+      required: [name, standardId]
+      properties:
+        name: { type: string }
+        code: { type: string }
+        standardId: { type: integer }
+        isActive: { type: boolean, default: true }
+
+    SubjectUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        code: { type: string }
+        isActive: { type: boolean }
+
+    SubjectList:
+      type: object
+      required: [data, total, page, limit]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Subject"
+        total: { type: integer }
+        page: { type: integer }
+        limit: { type: integer }
+
+    # ── CHAPTERS ──────────────────────────────────────────────────────────────
+    Chapter:
+      type: object
+      required: [id, name, subjectId, orderIndex]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        orderIndex: { type: integer }
+        subjectId: { type: integer }
+        subjectName: { type: ["string", "null"] }
+        syllabus: { type: ["string", "null"] }
+        isActive: { type: boolean }
+        topicsCount: { type: integer }
+        questionsCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+
+    ChapterInput:
+      type: object
+      required: [name, subjectId, orderIndex]
+      properties:
+        name: { type: string }
+        orderIndex: { type: integer }
+        subjectId: { type: integer }
+        syllabus: { type: ["string", "null"] }
+        isActive: { type: boolean, default: true }
+
+    ChapterUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        orderIndex: { type: integer }
+        syllabus: { type: ["string", "null"] }
+        isActive: { type: boolean }
+
+    ChapterList:
+      type: object
+      required: [data, total, page, limit]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Chapter"
+        total: { type: integer }
+        page: { type: integer }
+        limit: { type: integer }
+
+    # ── TOPICS ────────────────────────────────────────────────────────────────
+    Topic:
+      type: object
+      required: [id, name, chapterId]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: ["string", "null"] }
+        chapterId: { type: integer }
+        chapterName: { type: ["string", "null"] }
+        isActive: { type: boolean }
+        questionsCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+
+    TopicInput:
+      type: object
+      required: [name, chapterId]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        chapterId: { type: integer }
+        isActive: { type: boolean, default: true }
+
+    TopicUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        isActive: { type: boolean }
+
+    TopicList:
+      type: object
+      required: [data, total, page, limit]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Topic"
+        total: { type: integer }
+        page: { type: integer }
+        limit: { type: integer }
+
+    # ── QUESTION TYPES ────────────────────────────────────────────────────────
+    QuestionType:
+      type: object
+      required: [id, name, slug]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: ["string", "null"] }
+
+    # ── QUESTIONS ─────────────────────────────────────────────────────────────
+    Question:
+      type: object
+      required: [id, question, questionType, difficulty, difficultyScore, correctAnswer, explanation, qualityScore]
+      properties:
+        id: { type: integer }
+        question: { type: string }
+        questionType: { type: string }
+        difficulty: { type: string, enum: [easy, medium, hard, advanced] }
+        difficultyScore: { type: integer }
+        correctAnswer: { type: string }
+        options: { type: ["string", "null"] }
+        explanation: { type: string }
+        qualityScore: { type: number }
+        estimatedSolveTime: { type: integer }
+        learningObjective: { type: ["string", "null"] }
+        topicId: { type: ["integer", "null"] }
+        topicName: { type: ["string", "null"] }
+        chapterId: { type: ["integer", "null"] }
+        chapterName: { type: ["string", "null"] }
+        subjectId: { type: ["integer", "null"] }
+        subjectName: { type: ["string", "null"] }
+        boardId: { type: ["integer", "null"] }
+        boardName: { type: ["string", "null"] }
+        standardId: { type: ["integer", "null"] }
+        standardName: { type: ["string", "null"] }
+        modelUsed: { type: ["string", "null"] }
+        providerId: { type: ["integer", "null"] }
+        generatedAt: { type: string, format: date-time }
+
+    QuestionUpdate:
+      type: object
+      properties:
+        question: { type: string }
+        correctAnswer: { type: string }
+        options: { type: string }
+        explanation: { type: string }
+        difficulty: { type: string, enum: [easy, medium, hard, advanced] }
+        difficultyScore: { type: integer }
+        learningObjective: { type: string }
+
+    QuestionList:
+      type: object
+      required: [data, total, page, limit]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Question"
+        total: { type: integer }
+        page: { type: integer }
+        limit: { type: integer }
+
+    # ── GENERATION ────────────────────────────────────────────────────────────
+    GenerationRequest:
+      type: object
+      required: [boardId, standardId, subjectId, chapterId, topicId, questionType, difficulty, count, providerId, model]
+      properties:
+        boardId: { type: integer }
+        standardId: { type: integer }
+        subjectId: { type: integer }
+        chapterId: { type: integer }
+        topicId: { type: integer }
+        questionType: { type: string }
+        difficulty: { type: string, enum: [easy, medium, hard, advanced] }
+        count: { type: integer, minimum: 1, maximum: 50 }
+        providerId: { type: integer }
+        model: { type: string }
+
+    GenerationJob:
+      type: object
+      required: [jobId, status, createdAt]
+      properties:
+        jobId: { type: string }
+        status: { type: string, enum: [pending, processing, completed, failed] }
+        totalRequested: { type: integer }
+        createdAt: { type: string, format: date-time }
+
+    GenerationJobList:
+      type: object
+      required: [data, total, page, limit]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/GenerationJobSummary"
+        total: { type: integer }
+        page: { type: integer }
+        limit: { type: integer }
+
+    GenerationJobSummary:
+      type: object
+      required: [jobId, status, totalRequested, createdAt]
+      properties:
+        jobId: { type: string }
+        status: { type: string, enum: [pending, processing, completed, failed] }
+        totalRequested: { type: integer }
+        totalGenerated: { type: ["integer", "null"] }
+        topicName: { type: ["string", "null"] }
+        subjectName: { type: ["string", "null"] }
+        difficulty: { type: string }
+        questionType: { type: string }
+        model: { type: string }
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: ["string", "null"] }
+
+    GenerationJobDetail:
+      type: object
+      required: [jobId, status, totalRequested, createdAt]
+      properties:
+        jobId: { type: string }
+        status: { type: string, enum: [pending, processing, completed, failed] }
+        totalRequested: { type: integer }
+        totalGenerated: { type: ["integer", "null"] }
+        agentLogs: { type: ["string", "null"] }
+        errorMessage: { type: ["string", "null"] }
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Question"
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: ["string", "null"] }
+
+    # ── AI PROVIDERS ──────────────────────────────────────────────────────────
+    AiProvider:
+      type: object
+      required: [id, name, providerType, defaultModel, isActive]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        providerType: { type: string }
+        defaultModel: { type: string }
+        availableModels:
+          type: array
+          items: { type: string }
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    AiProviderInput:
+      type: object
+      required: [name, providerType, accessToken, defaultModel]
+      properties:
+        name: { type: string }
+        providerType: { type: string, enum: [github_models, openai, azure_openai, anthropic, gemini, groq] }
+        accessToken: { type: string }
+        defaultModel: { type: string }
+        availableModels:
+          type: array
+          items: { type: string }
+        isActive: { type: boolean, default: true }
+
+    AiProviderUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        accessToken: { type: string }
+        defaultModel: { type: string }
+        availableModels:
+          type: array
+          items: { type: string }
+        isActive: { type: boolean }
+
+    ProviderTestResult:
+      type: object
+      required: [success, message]
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        latencyMs: { type: ["integer", "null"] }
+
+    # ── PAPERS ────────────────────────────────────────────────────────────────
+    Paper:
+      type: object
+      required: [id, title, createdAt]
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        institutionName: { type: ["string", "null"] }
+        totalQuestions: { type: integer }
+        subjectName: { type: ["string", "null"] }
+        boardName: { type: ["string", "null"] }
+        standardName: { type: ["string", "null"] }
+        pdfUrl: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+
+    PaperInput:
+      type: object
+      required: [title, questionIds]
+      properties:
+        title: { type: string }
+        institutionName: { type: string }
+        questionIds:
+          type: array
+          items: { type: integer }
+        includeAnswerKey: { type: boolean, default: true }
+        includeExplanations: { type: boolean, default: false }
+
+    PaperList:
+      type: object
+      required: [data, total, page, limit]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Paper"
+        total: { type: integer }
+        page: { type: integer }
+        limit: { type: integer }
+
+    ExportResult:
+      type: object
+      required: [success, downloadUrl]
+      properties:
+        success: { type: boolean }
+        downloadUrl: { type: string }
+        expiresAt: { type: ["string", "null"] }
+
+    # ── ANALYTICS ─────────────────────────────────────────────────────────────
+    DashboardStats:
+      type: object
+      required: [totalQuestions, totalSubjects, totalChapters, totalTopics, questionsToday, questionsThisMonth, totalBoards, totalStandards, activeProviders, totalPapers, avgQualityScore]
+      properties:
+        totalQuestions: { type: integer }
+        totalSubjects: { type: integer }
+        totalChapters: { type: integer }
+        totalTopics: { type: integer }
+        questionsToday: { type: integer }
+        questionsThisMonth: { type: integer }
+        totalBoards: { type: integer }
+        totalStandards: { type: integer }
+        activeProviders: { type: integer }
+        totalPapers: { type: integer }
+        avgQualityScore: { type: number }
+        totalJobsRunning: { type: integer }
+
+    SubjectCount:
+      type: object
+      required: [subjectName, count]
+      properties:
+        subjectName: { type: string }
+        count: { type: integer }
+
+    DifficultyCount:
+      type: object
+      required: [difficulty, count]
+      properties:
+        difficulty: { type: string }
+        count: { type: integer }
+
+    ModelUsage:
+      type: object
+      required: [model, count, avgQualityScore]
+      properties:
+        model: { type: string }
+        provider: { type: string }
+        count: { type: integer }
+        avgQualityScore: { type: number }
+
+    ActivityItem:
+      type: object
+      required: [id, jobId, action, description, createdAt]
+      properties:
+        id: { type: integer }
+        jobId: { type: string }
+        action: { type: string }
+        description: { type: string }
+        questionsGenerated: { type: ["integer", "null"] }
+        model: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+
+    MonthlyReport:
+      type: object
+      required: [month, year, count, avgQualityScore]
+      properties:
+        month: { type: integer }
+        year: { type: integer }
+        label: { type: string }
+        count: { type: integer }
+        avgQualityScore: { type: number }
