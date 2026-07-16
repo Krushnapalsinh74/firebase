@@ -22,9 +22,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Sparkles } from 'lucide-react';
-import { ExamCombobox, type ExamOption } from '@/components/exam-combobox';
-import { useCreateBoard, getListBoardsQueryKey } from '@workspace/api-client-react';
-import { useQueryClient } from '@tanstack/react-query';
 
 const DIFFICULTY_LEVELS = [
   { value: 'easy',     label: 'Easy',     description: 'Basic recall & understanding',         color: 'bg-green-100 text-green-800 border-green-200' },
@@ -65,9 +62,6 @@ export default function GeneratePage() {
   const jeeAdvancedOnly = useWatch({ control: form.control, name: 'jeeAdvancedOnly' });
   const providerId = useWatch({ control: form.control, name: 'providerId' });
 
-  const queryClient = useQueryClient();
-  const createBoard = useCreateBoard();
-
   const { data: boards } = useListBoards();
   const { data: standards } = useListStandards({ boardId });
   const { data: subjects } = useListSubjects({ standardId });
@@ -76,43 +70,6 @@ export default function GeneratePage() {
   const { data: providers } = useListAiProviders();
   const { data: questionTypes } = useListQuestionTypes();
 
-  const boardsAsOptions: ExamOption[] = (boards?.data ?? []).map((b) => ({
-    id: b.id,
-    name: b.name,
-    code: b.code,
-    description: b.description ?? undefined,
-  }));
-
-  const handleBoardPreset = (preset: Omit<ExamOption, 'id'>, onChange: (v: string) => void) => {
-    createBoard.mutate(
-      { data: { name: preset.name, code: preset.code, description: preset.description } },
-      {
-        onSuccess: (res) => {
-          queryClient.invalidateQueries({ queryKey: getListBoardsQueryKey() });
-          if (res?.data?.id) onChange(String(res.data.id));
-          toast({ title: `${preset.name} added and selected!` });
-        },
-        onError: (err) => toast({ variant: 'destructive', title: 'Failed', description: err.message }),
-      }
-    );
-  };
-
-  const handleBoardCustom = (name: string, onChange: (v: string) => void) => {
-    const code = name.toUpperCase().replace(/\s+/g, '-').slice(0, 20);
-    createBoard.mutate(
-      { data: { name, code } },
-      {
-        onSuccess: (res) => {
-          queryClient.invalidateQueries({ queryKey: getListBoardsQueryKey() });
-          if (res?.data?.id) onChange(String(res.data.id));
-          toast({ title: `${name} created and selected!` });
-        },
-        onError: (err) => toast({ variant: 'destructive', title: 'Failed', description: err.message }),
-      }
-    );
-  };
-
-  const selectedBoard = boards?.data.find((b) => b.id === Number(boardId));
   const selectedSubject = subjects?.data.find((s) => s.id === Number(subjectId));
   const selectedChapter = chapters?.data.find((c) => c.id === Number(chapterId));
   const selectedTopic = topics?.data.find((t) => t.id === Number(topicId));
@@ -123,15 +80,6 @@ export default function GeneratePage() {
     : /\bphysics\b|\bchemistry\b|\bmathematics\b|\bjee\b|advanced|olympiad/i.test(
         `${selectedSubject?.name ?? ''} ${selectedChapter?.name ?? ''} ${selectedTopic?.name ?? ''}`
       );
-
-  // Dynamic label for the strict-mode checkbox
-  const examLabel = selectedBoard?.name ?? 'Exam';
-  const strictModeLabel = `${examLabel} strict mode`;
-  const strictModeDesc = selectedBoard
-    ? jeeTrackDetected
-      ? `Force strict ${examLabel}-only filtering for Physics, Chemistry, or Mathematics topics. Difficulty will be locked to Advanced.`
-      : `Enable strict ${examLabel}-pattern filtering. Difficulty will be locked to Advanced. Turn off to generate broad syllabus questions for any subject.`
-    : 'Select a board above to enable exam-specific strict mode.';
 
   const selectedProvider = providers?.find(p => p.id === Number(providerId));
 
@@ -226,19 +174,18 @@ export default function GeneratePage() {
                   control={form.control}
                   name="boardId"
                   render={({ field }) => (
-                    <FormItem className="md:col-span-2">
-                      <FormLabel>Exam / Board</FormLabel>
-                      <FormControl>
-                        <ExamCombobox
-                          existingBoards={boardsAsOptions}
-                          selectedBoard={boardsAsOptions.find((b) => b.id === Number(field.value))}
-                          placeholder="Search exam (JEE, NEET, GATE…) or add new"
-                          onSelectExisting={(b) => { field.onChange(String(b.id)); form.setValue('standardId', undefined as any); }}
-                          onCreateFromPreset={(p) => handleBoardPreset(p, (v) => { field.onChange(v); form.setValue('standardId', undefined as any); })}
-                          onCreateCustom={(name) => handleBoardCustom(name, (v) => { field.onChange(v); form.setValue('standardId', undefined as any); })}
-                          disabled={createBoard.isPending}
-                        />
-                      </FormControl>
+                    <FormItem>
+                      <FormLabel>Board</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value?.toString()}>
+                        <FormControl>
+                          <SelectTrigger><SelectValue placeholder="Select board" /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {boards?.data.map((b) => (
+                            <SelectItem key={b.id} value={b.id.toString()}>{b.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -377,14 +324,15 @@ export default function GeneratePage() {
                           <Checkbox
                             checked={field.value}
                             onCheckedChange={(checked) => field.onChange(Boolean(checked))}
-                            disabled={!selectedBoard}
                           />
                         </FormControl>
                         <div className="space-y-1">
-                          <FormLabel className={`text-sm font-medium ${!selectedBoard ? 'text-muted-foreground' : ''}`}>
-                            {strictModeLabel}
-                          </FormLabel>
-                          <p className="text-xs text-muted-foreground">{strictModeDesc}</p>
+                          <FormLabel className="text-sm font-medium">JEE / JEE Advanced level</FormLabel>
+                          <p className="text-xs text-muted-foreground">
+                            {jeeTrackDetected
+                              ? 'Turn this on to force strict JEE-only filtering for Physics, Chemistry, or Mathematics topics.'
+                              : 'Turn this on only when you want strict JEE-only filtering. Leave it off to generate advanced board-syllabus questions for any subject.'}
+                          </p>
                         </div>
                       </div>
                     </FormItem>
