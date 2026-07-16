@@ -1,0 +1,73 @@
+/workspace$ firebase login --no-localhost
+i  The Firebase CLI’s MCP server feature can optionally make use of Gemini in Firebase. Learn more about Gemini in Firebase and how it uses your data: https://firebase.google.com/docs/gemini-in-firebase#how-gemini-in-firebase-uses-your-data
+✔ Enable Gemini in Firebase features? Yes
+
+i  Firebase optionally collects CLI and Emulator Suite usage and error reporting information to help improve our products. Data is collected in accordance with Google's privacy policy (https://policies.google.com/privacy) and is not used to identify you.
+✔ Allow Firebase to collect CLI and Emulator Suite usage and error reporting information? Yes
+
+i  To change your preferences at any time, run `firebase logout` and `firebase login` again.
+
+To sign in to the Firebase CLI:
+
+1. Take note of your session ID:
+
+   BAC40
+
+2. Visit the URL below on any device and follow the instructions to get your code:
+
+   https://auth.firebase.tools/login?code_challenge=Ajq4CpVaY1iOThy1Alandk68uzwoWGZNWsKGtl1PLv0&session=bac40b1b-5c37-417c-86c1-80d1e42740a5&attest=7IUs4mu_x0DZuIf5W--T9WjTB4EfICInzGNSZJbUXP8
+
+3. Paste or enter the authorization code below once you have it:
+
+✔ Enter authorization code:
+4/0AXEQxIAoWW-sB3bbJmBI2WmexRep8_1Rzu6W8B3I0JfxBUnTf4KhftJQVp64KJHA4C8nhg
+
+✔  Success! Logged in as dalalifree.com@gmail.com
+~/workspace$ firebase deploy --project kpark-edu
+
+=== Deploying to 'kpark-edu'...
+
+i  deploying functions, hosting
+i  functions: preparing codebase default for deployment
+i  functions: ensuring required API cloudfunctions.googleapis.com is enabled...
+i  functions: ensuring required API cloudbuild.googleapis.com is enabled...
+i  artifactregistry: ensuring required API artifactregistry.googleapis.com is enabled...
+✔  functions: required API cloudbuild.googleapis.com is enabled
+✔  artifactregistry: required API artifactregistry.googleapis.com is enabled
+✔  functions: required API cloudfunctions.googleapis.com is enabled
+i  functions: Loading and analyzing source code for codebase default to determine what to deploy
+Serving at port 8081
+
+Successfully copied SQLite database to writeable /tmp/yunora.db
+
+[10:01:45.191] INFO (1542): Database seed complete
+
+i  extensions: ensuring required API firebaseextensions.googleapis.com is enabled...
+✔  extensions: required API firebaseextensions.googleapis.com is enabled
+i  functions: Loaded environment variables from .env.
+i  functions: preparing artifacts/api-server directory for uploading...
+i  functions: packaged /home/runner/workspace/artifacts/api-server (3.51 MB) for uploading
+i  functions: ensuring required API run.googleapis.com is enabled...
+i  functions: ensuring required API eventarc.googleapis.com is enabled...
+i  functions: ensuring required API pubsub.googleapis.com is enabled...
+i  functions: ensuring required API storage.googleapis.com is enabled...
+✔  functions: required API pubsub.googleapis.com is enabled
+✔  functions: required API eventarc.googleapis.com is enabled
+✔  functions: required API run.googleapis.com is enabled
+✔  functions: required API storage.googleapis.com is enabled
+i  functions: generating the service identity for pubsub.googleapis.com...
+i  functions: generating the service identity for eventarc.googleapis.com...
+✔  functions: artifacts/api-server source uploaded successfully
+i  hosting[kpark-edu]: beginning deploy...
+i  hosting[kpark-edu]: found 68 files in artifacts/yunora-admin/dist/public
+✔  hosting[kpark-edu]: file upload complete
+i  functions: updating Node.js 22 (2nd Gen) function api(asia-south1)...
+Build failed with status: FAILURE and message: npm error code EUNSUPPORTEDPROTOCOL
+npm error Unsupported URL Type "catalog:": catalog:
+npm error A complete log of this run can be found in: /www-data-home/.npm/_logs/2026-07-16T10_02_36_525Z-debug-0.log. For more details see the logs at https://console.cloud.google.com/cloud-build/builds;region=asia-south1/90f38aef-e2e4-4143-a9a3-a44dfddddf6b?project=1027948040827.
+⚠  functions: Deploys failed. Skipping deletes.
+
+Functions deploy had errors with the following functions:
+    api(asia-south1)
+
+Error: There wa
