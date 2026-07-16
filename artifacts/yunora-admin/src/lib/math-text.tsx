@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
 
@@ -79,6 +79,108 @@ function KatexSpan({ latex, display }: { latex: string; display: boolean }) {
   );
 }
 
+/** Renders a string that may contain $math$ segments into KaTeX HTML. */
+function renderMathToHtml(raw: string): string {
+  return raw.replace(/\$([^$]+)\$/g, (_, math) => {
+    try {
+      return katex.renderToString(math.trim(), {
+        throwOnError: false,
+        strict: false,
+        trust: true,
+      });
+    } catch {
+      return math;
+    }
+  });
+}
+
+/**
+ * Renders an SVG diagram, post-processing any <text> elements that contain
+ * $math$ expressions by replacing them with <foreignObject> + KaTeX HTML.
+ */
+function SvgDiagram({ content }: { content: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const cleanSvg = useMemo(() =>
+    DOMPurify.sanitize(content, {
+      USE_PROFILES: { svg: true, svgFilters: true },
+      ADD_TAGS: ['foreignObject'],
+      ADD_ATTR: ['xmlns', 'requiredFeatures'],
+    }),
+    [content]
+  );
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const svg = container.querySelector('svg');
+    if (!svg) return;
+
+    const textEls = Array.from(svg.querySelectorAll('text'));
+    for (const textEl of textEls) {
+      const raw = textEl.textContent || '';
+      if (!raw.includes('$')) continue;
+
+      // Gather style/position from the original <text> element
+      const x = parseFloat(textEl.getAttribute('x') || '0');
+      const y = parseFloat(textEl.getAttribute('y') || '0');
+      const fill = textEl.getAttribute('fill') || textEl.style.fill || '#ffffff';
+      const fontSizeAttr = textEl.getAttribute('font-size') || textEl.style.fontSize || '14';
+      const fontSize = parseFloat(fontSizeAttr) || 14;
+      const textAnchor = textEl.getAttribute('text-anchor') || 'start';
+
+      // Build KaTeX HTML for the label
+      const htmlContent = renderMathToHtml(raw);
+
+      // Size the foreignObject to comfortably hold the label
+      const foWidth = Math.max(200, raw.length * fontSize * 0.7);
+      const foHeight = fontSize * 3;
+
+      // Align horizontally the same way the <text> element would
+      let foX = x;
+      if (textAnchor === 'middle') foX = x - foWidth / 2;
+      else if (textAnchor === 'end') foX = x - foWidth;
+
+      // y in SVG text is the baseline; shift up so the label is centred
+      const foY = y - fontSize * 1.4;
+
+      const fo = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
+      fo.setAttribute('x', String(foX));
+      fo.setAttribute('y', String(foY));
+      fo.setAttribute('width', String(foWidth));
+      fo.setAttribute('height', String(foHeight));
+
+      const div = document.createElementNS('http://www.w3.org/1999/xhtml', 'div');
+      const styles: string[] = [
+        `color: ${fill}`,
+        `font-size: ${fontSize}px`,
+        `height: ${foHeight}px`,
+        `display: flex`,
+        `align-items: center`,
+        `line-height: 1`,
+        `white-space: nowrap`,
+      ];
+      if (textAnchor === 'middle') styles.push('justify-content: center');
+      else if (textAnchor === 'end') styles.push('justify-content: flex-end');
+
+      (div as HTMLElement).style.cssText = styles.join('; ');
+      (div as HTMLElement).innerHTML = htmlContent;
+
+      fo.appendChild(div);
+      textEl.parentNode?.replaceChild(fo, textEl);
+    }
+  }, [cleanSvg]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="my-6 flex justify-center bg-slate-900 rounded-lg p-4 max-w-full overflow-x-auto shadow-sm border border-border"
+      dangerouslySetInnerHTML={{ __html: cleanSvg }}
+    />
+  );
+}
+
 interface MathTextProps {
   children: string | null | undefined;
   className?: string;
@@ -110,14 +212,7 @@ export function MathText({ children, className = '', block = false }: MathTextPr
               </div>
             );
           } else if (part.format === 'svg') {
-            const cleanSvg = DOMPurify.sanitize(part.content, { USE_PROFILES: { svg: true } });
-            return (
-              <div
-                key={i}
-                className="my-6 flex justify-center bg-white rounded-lg p-4 max-w-full overflow-x-auto shadow-sm border border-border"
-                dangerouslySetInnerHTML={{ __html: cleanSvg }}
-              />
-            );
+            return <SvgDiagram key={i} content={part.content} />;
           }
           return null;
         }
