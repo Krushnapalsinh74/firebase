@@ -70,6 +70,7 @@ export default function GeneratePage() {
   const { data: providers } = useListAiProviders();
   const { data: questionTypes } = useListQuestionTypes();
 
+  const selectedBoard = boards?.data.find((b) => b.id === Number(boardId));
   const selectedSubject = subjects?.data.find((s) => s.id === Number(subjectId));
   const selectedChapter = chapters?.data.find((c) => c.id === Number(chapterId));
   const selectedTopic = topics?.data.find((t) => t.id === Number(topicId));
@@ -80,6 +81,15 @@ export default function GeneratePage() {
     : /\bphysics\b|\bchemistry\b|\bmathematics\b|\bjee\b|advanced|olympiad/i.test(
         `${selectedSubject?.name ?? ''} ${selectedChapter?.name ?? ''} ${selectedTopic?.name ?? ''}`
       );
+
+  // Dynamic label for the strict-mode checkbox
+  const examLabel = selectedBoard?.name ?? 'Exam';
+  const strictModeLabel = `${examLabel} strict mode`;
+  const strictModeDesc = selectedBoard
+    ? jeeTrackDetected
+      ? `Force strict ${examLabel}-only filtering for Physics, Chemistry, or Mathematics topics. Difficulty will be locked to Advanced.`
+      : `Enable strict ${examLabel}-pattern filtering. Difficulty will be locked to Advanced. Turn off to generate broad syllabus questions for any subject.`
+    : 'Select a board above to enable exam-specific strict mode.';
 
   const selectedProvider = providers?.find(p => p.id === Number(providerId));
 
@@ -324,15 +334,14 @@ export default function GeneratePage() {
                           <Checkbox
                             checked={field.value}
                             onCheckedChange={(checked) => field.onChange(Boolean(checked))}
+                            disabled={!selectedBoard}
                           />
                         </FormControl>
                         <div className="space-y-1">
-                          <FormLabel className="text-sm font-medium">JEE / JEE Advanced level</FormLabel>
-                          <p className="text-xs text-muted-foreground">
-                            {jeeTrackDetected
-                              ? 'Turn this on to force strict JEE-only filtering for Physics, Chemistry, or Mathematics topics.'
-                              : 'Turn this on only when you want strict JEE-only filtering. Leave it off to generate advanced board-syllabus questions for any subject.'}
-                          </p>
+                          <FormLabel className={`text-sm font-medium ${!selectedBoard ? 'text-muted-foreground' : ''}`}>
+                            {strictModeLabel}
+                          </FormLabel>
+                          <p className="text-xs text-muted-foreground">{strictModeDesc}</p>
                         </div>
                       </div>
                     </FormItem>
