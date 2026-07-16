@@ -61,20 +61,26 @@ export const INDIA_EXAMS: Omit<ExamOption, 'id'>[] = [
 interface ExamComboboxProps {
   /** Boards already in the database */
   existingBoards: ExamOption[];
+  /** Currently selected board (shows its name in the trigger) */
+  selectedBoard?: ExamOption;
   /** Called when the user picks a pre-populated exam that is not yet in DB */
   onCreateFromPreset: (preset: Omit<ExamOption, 'id'>) => void;
   /** Called when user types a custom name that doesn't match any preset/existing */
   onCreateCustom: (name: string) => void;
   /** Called when user selects a board that already exists */
   onSelectExisting: (board: ExamOption) => void;
+  /** Placeholder shown when nothing is selected */
+  placeholder?: string;
   disabled?: boolean;
 }
 
 export function ExamCombobox({
   existingBoards,
+  selectedBoard,
   onCreateFromPreset,
   onCreateCustom,
   onSelectExisting,
+  placeholder = 'Search or add an exam type…',
   disabled,
 }: ExamComboboxProps) {
   const [open, setOpen] = React.useState(false);
@@ -131,10 +137,10 @@ export function ExamCombobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between text-muted-foreground font-normal"
+          className={`w-full justify-between font-normal ${selectedBoard ? 'text-foreground' : 'text-muted-foreground'}`}
           disabled={disabled}
         >
-          <span>Search or add an exam type…</span>
+          <span>{selectedBoard ? selectedBoard.name : placeholder}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
