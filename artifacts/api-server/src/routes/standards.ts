@@ -11,7 +11,14 @@ router.get("/standards", requireAuth, async (req, res) => {
     const limitNum = Math.min(100, parseInt(limit));
 
     let query: FirebaseFirestore.Query = firestore.collection("standards");
-    if (boardId) query = query.where("boardId", "==", parseInt(boardId));
+    if (boardId) {
+      const boardIdNum = parseInt(boardId);
+      if (isNaN(boardIdNum)) {
+        res.json({ data: [], total: 0, page: pageNum, limit: limitNum });
+        return;
+      }
+      query = query.where("boardId", "==", boardIdNum);
+    }
     query = query.orderBy("level");
 
     let standards = snapshotToArr(await query.get()) as any[];
