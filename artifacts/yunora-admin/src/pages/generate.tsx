@@ -352,20 +352,24 @@ export default function GeneratePage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {DIFFICULTY_LEVELS.map((lvl) => {
                     const isSelected = diffCounts[lvl.value] !== undefined;
+                    const isLockedOut = jeeAdvancedOnly && lvl.value !== 'advanced';
                     return (
                       <div
                         key={lvl.value}
-                        onClick={() => toggleDifficulty(lvl.value)}
-                        className={`rounded-lg border-2 p-4 cursor-pointer transition-all select-none ${
-                          isSelected
-                            ? 'border-primary bg-primary/5'
-                            : 'border-border hover:border-primary/40 hover:bg-muted/30'
+                        onClick={() => !isLockedOut && toggleDifficulty(lvl.value)}
+                        className={`rounded-lg border-2 p-4 transition-all select-none ${
+                          isLockedOut
+                            ? 'border-border bg-muted/40 opacity-50 cursor-not-allowed'
+                            : isSelected
+                            ? 'border-primary bg-primary/5 cursor-pointer'
+                            : 'border-border hover:border-primary/40 hover:bg-muted/30 cursor-pointer'
                         }`}
                       >
                         <div className="flex items-start gap-3">
                           <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={() => toggleDifficulty(lvl.value)}
+                            checked={isLockedOut ? false : isSelected}
+                            disabled={isLockedOut}
+                            onCheckedChange={() => !isLockedOut && toggleDifficulty(lvl.value)}
                             onClick={(e) => e.stopPropagation()}
                             className="mt-0.5"
                           />
