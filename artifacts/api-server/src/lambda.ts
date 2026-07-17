@@ -46,6 +46,7 @@ export const api = onRequest(
     cors: true,
     timeoutSeconds: 300, // 5 minutes (important for long-running AI pipelines)
     memory: "1GiB",      // 1GB RAM (ensures fast generation and plenty of headroom)
+    region: "asia-south1", // Cloud Build in asia-south1 works; us-central1 has a broken npm
   },
   async (req, res) => {
     if (!seeded) {
