@@ -1,5 +1,7 @@
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 import { getFirestore, Timestamp, FieldValue } from "firebase-admin/firestore";
+import { readFileSync, existsSync } from "fs";
+import { resolve } from "path";
 
 // Initialize Firebase Admin SDK.
 // Cloud Functions: auto-authenticates via the runtime service account (no config needed).
@@ -11,7 +13,19 @@ if (!getApps().length) {
   if (saJson) {
     initializeApp({ credential: cert(JSON.parse(saJson)) });
   } else {
-    initializeApp();
+    // Fall back to reading the service account key file committed to the repo.
+    const candidatePaths = [
+      resolve(process.cwd(), "../../kpark-edu-firebase-adminsdk-fbsvc-465cb297c2.json"),
+      resolve(process.cwd(), "../../../kpark-edu-firebase-adminsdk-fbsvc-465cb297c2.json"),
+      "/home/runner/workspace/kpark-edu-firebase-adminsdk-fbsvc-465cb297c2.json",
+    ];
+    const saPath = candidatePaths.find(existsSync);
+    if (saPath) {
+      const saContent = JSON.parse(readFileSync(saPath, "utf-8"));
+      initializeApp({ credential: cert(saContent) });
+    } else {
+      initializeApp();
+    }
   }
 }
 
