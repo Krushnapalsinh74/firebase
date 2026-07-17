@@ -38,7 +38,7 @@ const frontendDist = path.resolve(process.cwd(), "../yunora-admin/dist/public");
 if (existsSync(frontendDist)) {
   app.use(express.static(frontendDist));
   // Fall through to index.html for SPA client-side routing
-  app.get("*", (_req, res) => {
+  app.get("/{*path}", (_req, res) => {
     res.sendFile(path.join(frontendDist, "index.html"));
   });
 }

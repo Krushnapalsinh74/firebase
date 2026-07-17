@@ -1,4 +1,4 @@
-import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { initializeApp, getApps, getApp, cert } from "firebase-admin/app";
 import { getFirestore, Timestamp, FieldValue } from "firebase-admin/firestore";
 
 // Initialize Firebase Admin SDK.
@@ -22,7 +22,9 @@ if (!getApps().length) {
   }
 }
 
-export const firestore = getFirestore();
+// Use a named database if FIRESTORE_DATABASE_ID is set, otherwise use the default.
+const dbId = process.env["FIRESTORE_DATABASE_ID"];
+export const firestore = dbId ? getFirestore(getApp(), dbId) : getFirestore();
 export { Timestamp, FieldValue };
 
 // ─── Auto-increment helpers ───────────────────────────────────────────────────
