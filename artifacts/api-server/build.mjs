@@ -68,10 +68,6 @@ async function buildAll() {
       "@aws-sdk/*",
       "@azure/*",
       "@opentelemetry/*",
-      "@google-cloud/*",
-      "@google/*",
-      "googleapis",
-      "firebase-admin",
       "@parcel/watcher",
       "@sentry/profiling-node",
       "@tree-sitter/*",
@@ -131,19 +127,14 @@ async function writeFirebaseFiles() {
     await readFile(path.resolve(artifactDir, "package.json"), "utf8")
   );
 
-  // Mirror the original source package.json deps exactly (minus workspace:*
-  // packages which are bundled by esbuild).  This is the dep set that Cloud
-  // Build successfully installed before workspace:* was introduced.  Do NOT
-  // pin @libsql/linux-x64-gnu explicitly — npm already installs it as an
-  // optional dep of libsql, and adding it as a top-level dep causes a
-  // duplicate-resolution conflict that crashes Cloud Build's npm 10 with
-  // "Exit handler never called!".
-  const SKIP_PREFIXES = ["@workspace/"];
-  const deps = {};
-  for (const [name, ver] of Object.entries(srcPkg.dependencies ?? {})) {
-    if (SKIP_PREFIXES.some((p) => name.startsWith(p))) continue;
-    deps[name] = ver;
-  }
+  // firebase-admin and firebase-functions are now fully bundled by esbuild
+  // (no longer in the external list).  The ONLY runtime npm dep is
+  // @libsql/client — its native binary (@libsql/linux-x64-gnu) is installed
+  // automatically by npm as an optional dep of libsql.  A 1-package npm
+  // install is far less likely to trigger Cloud Build's "Exit handler never
+  // called!" crash than the previous 12-package list.
+  const libsqlVer = srcPkg.dependencies?.["@libsql/client"] ?? "^0.14.0";
+  const deps = { "@libsql/client": libsqlVer };
 
   const distPkg = {
     name: srcPkg.name,
