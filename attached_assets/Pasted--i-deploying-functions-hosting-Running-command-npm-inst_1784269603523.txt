@@ -1,0 +1,82 @@
+
+i  deploying functions, hosting
+Running command: npm install --prefix artifacts/api-server/dist
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'firebase-admin@14.2.0',
+npm warn EBADENGINE   required: { node: '>=22' },
+npm warn EBADENGINE   current: { node: 'v20.20.0', npm: '10.8.2' }
+npm warn EBADENGINE }
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+
+added 169 packages, and audited 170 packages in 32s
+
+21 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+✔  functions: Finished running predeploy script.
+i  functions: preparing codebase default for deployment
+i  functions: ensuring required API cloudfunctions.googleapis.com is enabled...
+i  functions: ensuring required API cloudbuild.googleapis.com is enabled...
+i  artifactregistry: ensuring required API artifactregistry.googleapis.com is enabled...
+✔  functions: required API cloudfunctions.googleapis.com is enabled
+✔  functions: required API cloudbuild.googleapis.com is enabled
+✔  artifactregistry: required API artifactregistry.googleapis.com is enabled
+i  functions: Loading and analyzing source code for codebase default to determine what to deploy
+Serving at port 8010
+
+[06:26:23.639] ERROR (5181): Database seed failed — continuing startup
+    err: {
+      "type": "_DrizzleQueryError",
+      "message": "Failed query: select count(*) from \"users\" where \"users\".\"email\" = ?\nparams: admin@123.com: SQLITE_ERROR: no such table: users: no such table: users",
+      "stack":
+          Error: Failed query: select count(*) from "users" where "users"."email" = ?
+          params: admin@123.com
+              at LibSQLPreparedQuery.queryWithCache (file:///home/runner/workspace/artifacts/api-server/dist/lambda.mjs:44455:15)
+              at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+              at async LibSQLPreparedQuery.values (file:///home/runner/workspace/artifacts/api-server/dist/lambda.mjs:44799:12)
+              at async LibSQLPreparedQuery.all (file:///home/runner/workspace/artifacts/api-server/dist/lambda.mjs:44742:18)
+              at async seedAdmin (file:///home/runner/workspace/artifacts/api-server/dist/lambda.mjs:58724:23)
+              at async runSeed (file:///home/runner/workspace/artifacts/api-server/dist/lambda.mjs:58801:5)
+          caused by: LibsqlError: SQLITE_ERROR: no such table: users
+              at mapSqliteError (file:///home/runner/workspace/artifacts/api-server/dist/node_modules/@libsql/client/lib-esm/sqlite3.js:372:16)
+              at executeStmt (file:///home/runner/workspace/artifacts/api-server/dist/node_modules/@libsql/client/lib-esm/sqlite3.js:277:15)
+              at Sqlite3Client.execute (file:///home/runner/workspace/artifacts/api-server/dist/node_modules/@libsql/client/lib-esm/sqlite3.js:79:16)
+              at file:///home/runner/workspace/artifacts/api-server/dist/lambda.mjs:44801:61
+              at LibSQLPreparedQuery.queryWithCache (file:///home/runner/workspace/artifacts/api-server/dist/lambda.mjs:44453:22)
+              at LibSQLPreparedQuery.values (file:///home/runner/workspace/artifacts/api-server/dist/lambda.mjs:44799:23)
+              at LibSQLPreparedQuery.all (file:///home/runner/workspace/artifacts/api-server/dist/lambda.mjs:44742:29)
+              at SQLiteSelectBase.all (file:///home/runner/workspace/artifacts/api-server/dist/lambda.mjs:43435:28)
+              at SQLiteSelectBase.execute (file:///home/runner/workspace/artifacts/api-server/dist/lambda.mjs:43444:17)
+              at SQLiteSelectBase.then (file:///home/runner/workspace/artifacts/api-server/dist/lambda.mjs:41285:17)
+          caused by: SqliteError: no such table: users
+              at convertError (/home/runner/workspace/artifacts/api-server/dist/node_modules/libsql/index.js:51:12)
+              at Database.prepare (/home/runner/workspace/artifacts/api-server/dist/node_modules/libsql/index.js:119:13)
+              at executeStmt (file:///home/runner/workspace/artifacts/api-server/dist/node_modules/@libsql/client/lib-esm/sqlite3.js:248:28)
+              at Sqlite3Client.execute (file:///home/runner/workspace/artifacts/api-server/dist/node_modules/@libsql/client/lib-esm/sqlite3.js:79:16)
+              at file:///home/runner/workspace/artifacts/api-server/dist/lambda.mjs:44801:61
+              at LibSQLPreparedQuery.queryWithCache (file:///home/runner/workspace/artifacts/api-server/dist/lambda.mjs:44453:22)
+              at LibSQLPreparedQuery.values (file:///home/runner/workspace/artifacts/api-server/dist/lambda.mjs:44799:23)
+              at LibSQLPreparedQuery.all (file:///home/runner/workspace/artifacts/api-server/dist/lambda.mjs:44742:29)
+              at SQLiteSelectBase.all (file:///home/runner/workspace/artifacts/api-server/dist/lambda.mjs:43435:28)
+              at SQLiteSelectBase.execute (file:///home/runner/workspace/artifacts/api-server/dist/lambda.mjs:43444:17)
+      "query": "select count(*) from \"users\" where \"users\".\"email\" = ?",
+      "params": [
+        "admin@123.com"
+      ]
+    }
+
+i  extensions: ensuring required API firebaseextensions.googleapis.com is enabled...
+✔  extensions: required API firebaseextensions.googleapis.com is enabled
+i  functions: preparing artifacts/api-server/dist directory for uploading...
+i  functions: packaged /home/runner/workspace/artifacts/api-server/dist (3.46 MB) for uploading
+i  functions: ensuring required API run.googleapis.com is enabled...
+i  functions: ensuring required API eventarc.googleapis.com is enabled...
+i  functions: ensuring required API pubsub.googleapis.com is enabled...
+i  functions: ensuring required API storage.googleapis.com is enabled...
+✔  functions: required API run.googleapis.com is enabled
+✔  functions: required API storage.googleapis.com is enabled
+✔  functions: required API eventarc.googleapis.com is enabled
+✔  functions: required API pubsub.googleapis.com is enabled
+i  functions: generating the service identity for pubsub.googleapis.com...
+i  functions: generating the service identity for eventarc.googleapis.com...
