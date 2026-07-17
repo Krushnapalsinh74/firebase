@@ -131,46 +131,18 @@ async function writeFirebaseFiles() {
     await readFile(path.resolve(artifactDir, "package.json"), "utf8")
   );
 
-  // Only include truly-external deps (native/unbundleable).
-  // - workspace:* deps are already bundled by esbuild — must NOT appear here
-  //   (npm rejects the workspace: protocol).
-  // - pino / pino-pretty are bundled by esbuild-plugin-pino into the worker
-  //   files, so they don't need to be installed either.
-  // - "type": "module" is omitted intentionally: our output files use the
-  //   .mjs extension so Node.js treats them as ESM already, and having
-  //   "type":"module" triggers an npm 10.x bug ("Exit handler never called")
-  //   when combined with native postinstall scripts on Cloud Build.
-  const externalDeps = [
-    "firebase-admin",
-    "firebase-functions",
-    "@libsql/client",
-  ];
-
+  // Mirror the original source package.json deps exactly (minus workspace:*
+  // packages which are bundled by esbuild).  This is the dep set that Cloud
+  // Build successfully installed before workspace:* was introduced.  Do NOT
+  // pin @libsql/linux-x64-gnu explicitly — npm already installs it as an
+  // optional dep of libsql, and adding it as a top-level dep causes a
+  // duplicate-resolution conflict that crashes Cloud Build's npm 10 with
+  // "Exit handler never called!".
+  const SKIP_PREFIXES = ["@workspace/"];
   const deps = {};
-  for (const dep of externalDeps) {
-    if (srcPkg.dependencies?.[dep]) deps[dep] = srcPkg.dependencies[dep];
-  }
-
-  // libsql lists its platform binaries as *optional* dependencies.
-  // With omit=optional in .npmrc, they're all skipped — but then libsql
-  // crashes at load time because it can't find the native module.
-  // Fix: pin the Linux x64 binary as an explicit (non-optional) dep so it
-  // installs even with omit=optional. Both Replit and Firebase Cloud Build
-  // run on Linux x64, so this binary is correct for both environments.
-  // We discover the required version from libsql's own optionalDependencies.
-  const libsqlPkgPath = path.resolve(
-    artifactDir,
-    "node_modules/libsql/package.json"
-  );
-  try {
-    const libsqlPkg = JSON.parse(await readFile(libsqlPkgPath, "utf8"));
-    const nativeVersion = libsqlPkg.optionalDependencies?.["@libsql/linux-x64-gnu"];
-    if (nativeVersion) {
-      deps["@libsql/linux-x64-gnu"] = nativeVersion;
-    }
-  } catch {
-    // libsql not yet installed locally — use a fallback version
-    deps["@libsql/linux-x64-gnu"] = "0.4.7";
+  for (const [name, ver] of Object.entries(srcPkg.dependencies ?? {})) {
+    if (SKIP_PREFIXES.some((p) => name.startsWith(p))) continue;
+    deps[name] = ver;
   }
 
   const distPkg = {
@@ -188,53 +160,9 @@ async function writeFirebaseFiles() {
     JSON.stringify(distPkg, null, 2) + "\n"
   );
 
-  // .npmrc for Cloud Build:
-  // - legacy-peer-deps: avoids npm 10.x peer-dep resolution conflicts.
-  // - omit=optional: skips platform-specific @libsql binary packages for
-  //   other platforms (darwin, arm64); @libsql/linux-x64-gnu is listed
-  //   explicitly as a non-optional dep so it IS installed.
-  // - ignore-scripts: protobufjs (dep of firebase-functions) has a postinstall
-  //   script that crashes Cloud Build's npm with "Exit handler never called!".
-  //   Skipping scripts is safe — protobufjs falls back to pure JS automatically.
-  await writeFile(
-    path.join(distDir, ".npmrc"),
-    "legacy-peer-deps=true\nomit=optional\nignore-scripts=true\n"
-  );
-
-  // Dockerfile — Firebase detects this and uses `docker build` instead of
-  // running `npm install` as a Cloud Build step. This bypasses Cloud Build's
-  // broken npm (which crashes with "Exit handler never called!" due to
-  // protobufjs's postinstall script). npm inside Docker is the stable version
-  // shipped with node:22-slim and is unaffected by the Cloud Build npm bug.
-  await writeFile(path.join(distDir, "Dockerfile"), `\
-FROM node:22-slim
-WORKDIR /workspace
-
-# Install production dependencies inside Docker.
-# The .npmrc (ignore-scripts, omit=optional, legacy-peer-deps) is copied first
-# so npm uses it during the RUN step. @libsql/linux-x64-gnu is already listed
-# as an explicit dep so it installs even with omit=optional.
-COPY package.json .npmrc ./
-RUN npm install --production
-
-# Copy the built lambda and pino worker files.
-COPY *.mjs ./
-
-ENV NODE_ENV=production
-# firebase-functions/v2 auto-starts an HTTP server when loaded in Cloud Run.
-# FUNCTION_TARGET tells it which export to serve.
-ENV FUNCTION_TARGET=api
-
-CMD ["node", "--enable-source-maps", "lambda.mjs"]
-`);
-
-  // .dockerignore — keeps the Cloud Build context small by excluding source
-  // maps and anything not needed by the Dockerfile.
-  await writeFile(path.join(distDir, ".dockerignore"), `\
-*.map
-node_modules
-.npmrc
-`);
+  // No .npmrc — the original working deployment had no special npm flags.
+  // All the flags we tried (legacy-peer-deps, omit=optional, ignore-scripts)
+  // failed to fix the Cloud Build crash and may have caused it.
 
   // Remove node_modules from dist if they exist (left by a local npm install
   // during predeploy). Firebase ignores them during upload anyway, but a
