@@ -827,3 +827,34 @@ npm error A complete log of this run can be found in: /www-data-home/.npm/_logs/
     at async chain (/home/runner/workspace/.config/npm/node_global/lib/node_modules/firebase-tools/lib/deploy/index.js:105:9)
 [error] 
 [error] Error: There was an error deploying functions
+[debug] [2026-07-17T05:50:06.402Z] ----------------------------------------------------------------------
+[debug] [2026-07-17T05:50:06.472Z] Command:       /nix/store/a1kxazxkgw7mjbjgisvah95p1r3n5ykl-nodejs-22.16.0/bin/node /nix/store/3fpqrq7ngq6ssmaa36hi4lkssyarf9al-firebase-tools-14.3.0/lib/node_modules/firebase-tools/lib/bin/firebase.js login --no-localhost
+[debug] [2026-07-17T05:50:06.472Z] CLI Version:   14.3.0
+[debug] [2026-07-17T05:50:06.472Z] Platform:      linux
+[debug] [2026-07-17T05:50:06.473Z] Node Version:  v22.16.0
+[debug] [2026-07-17T05:50:06.473Z] Time:          Fri Jul 17 2026 05:50:06 GMT+0000 (Coordinated Universal Time)
+[debug] [2026-07-17T05:50:06.473Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-07-17T05:50:06.474Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[info] i  Firebase optionally collects CLI and Emulator Suite usage and error reporting information to help improve our products. Data is collected in accordance with Google's privacy policy (https://policies.google.com/privacy) and is not used to identify you.
+ 
+[debug] [2026-07-17T05:50:07.404Z] <<< [apiv2][status] GET https://firebase-public.firebaseio.com/cli.json 200
+[debug] [2026-07-17T05:50:07.404Z] <<< [apiv2][body] GET https://firebase-public.firebaseio.com/cli.json {"cloudBuildErrorAfter":1594252800000,"cloudBuildWarnAfter":1590019200000,"defaultNode10After":1594252800000,"minVersion":"3.0.5","node8DeploysDisabledAfter":1613390400000,"node8RuntimeDisabledAfter":1615809600000,"node8WarnAfter":1600128000000}
+[info] i  To change your data collection preference at any time, run `firebase logout` and log in again. 
+[debug] [2026-07-17T05:50:10.385Z] >>> [apiv2][query] POST https://auth.firebase.tools/attest [none]
+[debug] [2026-07-17T05:50:10.386Z] >>> [apiv2][body] POST https://auth.firebase.tools/attest {"session_id":"6d74816b-4031-4db2-bdd8-f29eb18c2909"}
+[debug] [2026-07-17T05:50:11.151Z] <<< [apiv2][status] POST https://auth.firebase.tools/attest 200
+[debug] [2026-07-17T05:50:11.151Z] <<< [apiv2][body] POST https://auth.firebase.tools/attest {"token":"5rJZqbAesnSqhB8uQLw17tURP6ztH5XKoqdxHuXIIko"}
+[info] 
+[info] To sign in to the Firebase CLI:
+[info] 
+[info] 1. Take note of your session ID:
+[info] 
+[info]    6D748
+[info] 
+[info] 2. Visit the URL below on any device and follow the instructions to get your code:
+[info] 
+[info]    https://auth.firebase.tools/login?code_challenge=H57QsT6XC56YjNDo4XrvVZlXafPRfX2cbirQhmkxtrA&session=6d74816b-4031-4db2-bdd8-f29eb18c2909&attest=5rJZqbAesnSqhB8uQLw17tURP6ztH5XKoqdxHuXIIko
+[info] 
+[info] 3. Paste or enter the authorization code below once you have it:
+[info] 
