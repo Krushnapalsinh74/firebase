@@ -201,6 +201,41 @@ async function writeFirebaseFiles() {
     "legacy-peer-deps=true\nomit=optional\nignore-scripts=true\n"
   );
 
+  // Dockerfile — Firebase detects this and uses `docker build` instead of
+  // running `npm install` as a Cloud Build step. This bypasses Cloud Build's
+  // broken npm (which crashes with "Exit handler never called!" due to
+  // protobufjs's postinstall script). npm inside Docker is the stable version
+  // shipped with node:22-slim and is unaffected by the Cloud Build npm bug.
+  await writeFile(path.join(distDir, "Dockerfile"), `\
+FROM node:22-slim
+WORKDIR /workspace
+
+# Install production dependencies inside Docker.
+# The .npmrc (ignore-scripts, omit=optional, legacy-peer-deps) is copied first
+# so npm uses it during the RUN step. @libsql/linux-x64-gnu is already listed
+# as an explicit dep so it installs even with omit=optional.
+COPY package.json .npmrc ./
+RUN npm install --production
+
+# Copy the built lambda and pino worker files.
+COPY *.mjs ./
+
+ENV NODE_ENV=production
+# firebase-functions/v2 auto-starts an HTTP server when loaded in Cloud Run.
+# FUNCTION_TARGET tells it which export to serve.
+ENV FUNCTION_TARGET=api
+
+CMD ["node", "--enable-source-maps", "lambda.mjs"]
+`);
+
+  // .dockerignore — keeps the Cloud Build context small by excluding source
+  // maps and anything not needed by the Dockerfile.
+  await writeFile(path.join(distDir, ".dockerignore"), `\
+*.map
+node_modules
+.npmrc
+`);
+
   // Remove node_modules from dist if they exist (left by a local npm install
   // during predeploy). Firebase ignores them during upload anyway, but a
   // stale node_modules can confuse the local Firebase CLI analysis step.
