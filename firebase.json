@@ -20,6 +20,14 @@
   "functions": {
     "source": "artifacts/api-server/dist",
     "runtime": "nodejs22",
-    "predeploy": ["npm install --prefix artifacts/api-server/dist"]
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/*.map"
+    ],
+    "predeploy": [
+      "pnpm --filter @workspace/api-server run build",
+      "npm install --prefix artifacts/api-server/dist"
+    ]
   }
 }
