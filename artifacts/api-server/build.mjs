@@ -151,9 +151,25 @@ async function writeFirebaseFiles() {
     JSON.stringify(distPkg, null, 2) + "\n"
   );
 
-  // No .npmrc — the original working deployment had no special npm flags.
-  // All the flags we tried (legacy-peer-deps, omit=optional, ignore-scripts)
-  // failed to fix the Cloud Build crash and may have caused it.
+  // functions.yaml — Firebase CLI reads this file first (detectFromYaml).
+  // When present it skips spawning the firebase-functions admin binary for
+  // local analysis, so firebase-functions does NOT need to be installed in
+  // dist/node_modules at all. Format: specVersion v1alpha1, matching the
+  // onRequest config in lambda.ts exactly.
+  await writeFile(
+    path.join(distDir, "functions.yaml"),
+    `specVersion: v1alpha1
+endpoints:
+  api:
+    platform: gcfv2
+    region:
+      - asia-south1
+    entryPoint: api
+    timeoutSeconds: 300
+    availableMemoryMb: 1024
+    httpsTrigger: {}
+`
+  );
 
   // Remove node_modules from dist if they exist (left by a local npm install
   // during predeploy). Firebase ignores them during upload anyway, but a
