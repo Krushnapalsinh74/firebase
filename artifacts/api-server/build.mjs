@@ -151,6 +151,28 @@ async function writeFirebaseFiles() {
     if (srcPkg.dependencies?.[dep]) deps[dep] = srcPkg.dependencies[dep];
   }
 
+  // libsql lists its platform binaries as *optional* dependencies.
+  // With omit=optional in .npmrc, they're all skipped — but then libsql
+  // crashes at load time because it can't find the native module.
+  // Fix: pin the Linux x64 binary as an explicit (non-optional) dep so it
+  // installs even with omit=optional. Both Replit and Firebase Cloud Build
+  // run on Linux x64, so this binary is correct for both environments.
+  // We discover the required version from libsql's own optionalDependencies.
+  const libsqlPkgPath = path.resolve(
+    artifactDir,
+    "node_modules/libsql/package.json"
+  );
+  try {
+    const libsqlPkg = JSON.parse(await readFile(libsqlPkgPath, "utf8"));
+    const nativeVersion = libsqlPkg.optionalDependencies?.["@libsql/linux-x64-gnu"];
+    if (nativeVersion) {
+      deps["@libsql/linux-x64-gnu"] = nativeVersion;
+    }
+  } catch {
+    // libsql not yet installed locally — use a fallback version
+    deps["@libsql/linux-x64-gnu"] = "0.4.7";
+  }
+
   const distPkg = {
     name: srcPkg.name,
     version: srcPkg.version,
