@@ -20,6 +20,9 @@
   "functions": {
     "source": "artifacts/api-server/dist",
     "runtime": "nodejs22",
-    "predeploy": ["npm install --prefix artifacts/api-server/dist"]
+    "predeploy": [
+      "npm install --prefix artifacts/api-server/dist",
+      "npm install firebase-functions --prefix artifacts/api-server/dist --no-save"
+    ]
   }
 }
