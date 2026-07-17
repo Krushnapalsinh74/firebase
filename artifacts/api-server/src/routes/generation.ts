@@ -9,7 +9,7 @@ import {
   topicsTable, chaptersTable, subjectsTable, boardsTable,
   standardsTable, activityLogsTable,
 } from "@workspace/db";
-import { eq, count } from "drizzle-orm";
+import { eq, count, desc } from "drizzle-orm";
 import { requireAuth, simpleDecrypt } from "../lib/auth.js";
 import { randomUUID } from "crypto";
 import { runJEEPipeline, GenerationRequest, QUALITY, isJeeGenerationAllowedContext } from "../lib/pipeline.js";
@@ -171,7 +171,7 @@ router.get("/generation/jobs", requireAuth, async (req, res) => {
 
     const [{ total }] = await db.select({ total: count() }).from(generationJobsTable);
     const jobs = await db.select().from(generationJobsTable)
-      .orderBy(generationJobsTable.createdAt).limit(limitNum).offset(offset);
+      .orderBy(desc(generationJobsTable.createdAt)).limit(limitNum).offset(offset);
 
     res.json({
       data: jobs.map(j => ({

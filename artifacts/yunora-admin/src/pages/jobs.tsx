@@ -16,6 +16,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 
+const DIFFICULTY_META: Record<string, { label: string; color: string }> = {
+  easy:     { label: 'Easy',     color: 'bg-green-100 text-green-800 border-green-200' },
+  medium:   { label: 'Medium',   color: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
+  hard:     { label: 'Hard',     color: 'bg-orange-100 text-orange-800 border-orange-200' },
+  advanced: { label: 'Advanced', color: 'bg-red-100 text-red-800 border-red-200' },
+};
+
 export default function JobsPage() {
   const { data, isLoading } = useListGenerationJobs({ limit: 50 });
 
@@ -49,6 +56,7 @@ export default function JobsPage() {
                 <TableRow>
                   <TableHead>Job ID</TableHead>
                   <TableHead>Target</TableHead>
+                  <TableHead>Difficulty</TableHead>
                   <TableHead>Model</TableHead>
                   <TableHead>Progress</TableHead>
                   <TableHead>Status</TableHead>
@@ -86,6 +94,12 @@ function JobRow({ job, badge }: { job: any, badge: React.ReactNode }) {
               <span className="font-medium truncate max-w-[200px]">{job.topicName || 'Unknown Topic'}</span>
               <span className="text-xs text-muted-foreground">{job.subjectName}</span>
             </div>
+          </TableCell>
+          <TableCell>
+            {job.difficulty && (() => {
+              const meta = DIFFICULTY_META[job.difficulty] ?? { label: job.difficulty, color: 'bg-muted text-muted-foreground border-border' };
+              return <Badge variant="outline" className={`text-xs capitalize ${meta.color}`}>{meta.label}</Badge>;
+            })()}
           </TableCell>
           <TableCell className="text-sm">{job.model}</TableCell>
           <TableCell>
