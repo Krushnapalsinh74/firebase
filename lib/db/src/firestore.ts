@@ -11,7 +11,14 @@ import { resolve } from "path";
 if (!getApps().length) {
   const saJson = process.env["FIREBASE_SERVICE_ACCOUNT_JSON"];
   if (saJson) {
-    initializeApp({ credential: cert(JSON.parse(saJson)) });
+    const parsed = JSON.parse(saJson);
+    // The private_key may arrive with literal \n instead of real newlines when
+    // copy-pasted into a secrets form. Fix it so the RSA key is valid.
+    if (parsed.private_key && typeof parsed.private_key === "string") {
+      parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
+    }
+    console.log("[firebase-init] Using FIREBASE_SERVICE_ACCOUNT_JSON env var, project:", parsed.project_id, "client_email:", parsed.client_email);
+    initializeApp({ credential: cert(parsed) });
   } else {
     // Fall back to reading the service account key file committed to the repo.
     const candidatePaths = [
@@ -21,9 +28,11 @@ if (!getApps().length) {
     ];
     const saPath = candidatePaths.find(existsSync);
     if (saPath) {
+      console.log("[firebase-init] Using service account file:", saPath);
       const saContent = JSON.parse(readFileSync(saPath, "utf-8"));
       initializeApp({ credential: cert(saContent) });
     } else {
+      console.log("[firebase-init] No credentials found, using ADC");
       initializeApp();
     }
   }
