@@ -125,21 +125,25 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
   });
 }
 
-async function writeFirebasePackageJson() {
-  const { writeFile, readFile } = await import("node:fs/promises");
+async function writeFirebaseFiles() {
+  const { writeFile, readFile, rm } = await import("node:fs/promises");
   const srcPkg = JSON.parse(
     await readFile(path.resolve(artifactDir, "package.json"), "utf8")
   );
 
-  // Only include truly-external deps (native/unbundleable) — workspace:* deps
-  // are already bundled by esbuild and must NOT appear here (npm rejects workspace: protocol).
+  // Only include truly-external deps (native/unbundleable).
+  // - workspace:* deps are already bundled by esbuild — must NOT appear here
+  //   (npm rejects the workspace: protocol).
+  // - pino / pino-pretty are bundled by esbuild-plugin-pino into the worker
+  //   files, so they don't need to be installed either.
+  // - "type": "module" is omitted intentionally: our output files use the
+  //   .mjs extension so Node.js treats them as ESM already, and having
+  //   "type":"module" triggers an npm 10.x bug ("Exit handler never called")
+  //   when combined with native postinstall scripts on Cloud Build.
   const externalDeps = [
     "firebase-admin",
     "firebase-functions",
     "@libsql/client",
-    "pino",
-    "pino-pretty",
-    "thread-stream",
   ];
 
   const deps = {};
@@ -151,19 +155,31 @@ async function writeFirebasePackageJson() {
     name: srcPkg.name,
     version: srcPkg.version,
     private: true,
-    type: "module",
     main: "lambda.mjs",
     dependencies: deps,
   };
 
+  const distDir = path.resolve(artifactDir, "dist");
+
   await writeFile(
-    path.resolve(artifactDir, "dist/package.json"),
+    path.join(distDir, "package.json"),
     JSON.stringify(distPkg, null, 2) + "\n"
   );
+
+  // .npmrc: legacy-peer-deps avoids npm 10.x resolution bugs on Cloud Build
+  await writeFile(
+    path.join(distDir, ".npmrc"),
+    "legacy-peer-deps=true\n"
+  );
+
+  // Remove node_modules from dist if they exist (left by a local npm install
+  // during predeploy). Firebase ignores them during upload anyway, but a
+  // stale node_modules can confuse the local Firebase CLI analysis step.
+  await rm(path.join(distDir, "node_modules"), { recursive: true, force: true });
 }
 
 buildAll()
-  .then(() => writeFirebasePackageJson())
+  .then(() => writeFirebaseFiles())
   .catch((err) => {
     console.error(err);
     process.exit(1);
