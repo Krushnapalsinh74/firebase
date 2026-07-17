@@ -12,9 +12,8 @@ router.get("/topics", requireAuth, async (req, res) => {
 
     let query: FirebaseFirestore.Query = firestore.collection("topics");
     if (chapterId) query = query.where("chapterId", "==", parseInt(chapterId));
-    query = query.orderBy("name");
-
     let topics = snapshotToArr(await query.get()) as any[];
+    topics.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
     if (search) {
       const q = search.toLowerCase();
       topics = topics.filter((t) => t.name.toLowerCase().includes(q));

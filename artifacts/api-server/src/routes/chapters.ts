@@ -13,9 +13,8 @@ router.get("/chapters", requireAuth, async (req, res) => {
     let query: FirebaseFirestore.Query = firestore.collection("chapters");
     if (subjectId) query = query.where("subjectId", "==", parseInt(subjectId));
     if (syllabus && syllabus !== "__none__") query = query.where("syllabus", "==", syllabus);
-    query = query.orderBy("orderIndex");
-
     let chapters = snapshotToArr(await query.get()) as any[];
+    chapters.sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
 
     if (syllabus === "__none__") {
       chapters = chapters.filter((c) => !c.syllabus || c.syllabus.trim() === "");

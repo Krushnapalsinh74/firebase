@@ -19,9 +19,8 @@ router.get("/standards", requireAuth, async (req, res) => {
       }
       query = query.where("boardId", "==", boardIdNum);
     }
-    query = query.orderBy("level");
-
     let standards = snapshotToArr(await query.get()) as any[];
+    standards.sort((a, b) => (a.level ?? 0) - (b.level ?? 0));
     if (search) {
       const q = search.toLowerCase();
       standards = standards.filter((s) => s.name.toLowerCase().includes(q));
