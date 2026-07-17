@@ -39,6 +39,9 @@ catalogs:
     clsx:
       specifier: ^2.1.1
       version: 2.1.1
+    drizzle-orm:
+      specifier: ^0.45.2
+      version: 0.45.2
     framer-motion:
       specifier: ^12.23.24
       version: 12.38.0
@@ -641,9 +644,18 @@ importers:
 
   lib/db:
     dependencies:
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.45.2(@libsql/client@0.14.0)(@opentelemetry/api@1.9.1)
+      drizzle-zod:
+        specifier: ^0.7.0
+        version: 0.7.1(drizzle-orm@0.45.2(@libsql/client@0.14.0)(@opentelemetry/api@1.9.1))(zod@3.25.76)
       firebase-admin:
         specifier: ^14.1.0
         version: 14.1.0
+      zod:
+        specifier: ^3.25.67
+        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -2645,6 +2657,12 @@ packages:
         optional: true
       sqlite3:
         optional: true
+
+  drizzle-zod@0.7.1:
+    resolution: {integrity: sha512-nZzALOdz44/AL2U005UlmMqaQ1qe5JfanvLujiTHiiT8+vZJTBFhj3pY4Vk+L6UWyKFfNmLhk602Hn4kCTynKQ==}
+    peerDependencies:
+      drizzle-orm: '>=0.36.0'
+      zod: '>=3.0.0'
 
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
@@ -6507,6 +6525,11 @@ snapshots:
     optionalDependencies:
       '@libsql/client': 0.14.0
       '@opentelemetry/api': 1.9.1
+
+  drizzle-zod@0.7.1(drizzle-orm@0.45.2(@libsql/client@0.14.0)(@opentelemetry/api@1.9.1))(zod@3.25.76):
+    dependencies:
+      drizzle-orm: 0.45.2(@libsql/client@0.14.0)(@opentelemetry/api@1.9.1)
+      zod: 3.25.76
 
   dunder-proto@1.0.1:
     dependencies:

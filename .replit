@@ -79,4 +79,3 @@ externalPort = 3000
 [userenv]
 
 [userenv.shared]
-GOOGLE_APPLICATION_CREDENTIALS = "/home/runner/workspace/kpark-edu-firebase-adminsdk-fbsvc-465cb297c2.json"

@@ -1,13 +1,11 @@
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 import { getFirestore, Timestamp, FieldValue } from "firebase-admin/firestore";
-import { readFileSync, existsSync } from "fs";
-import { resolve } from "path";
 
 // Initialize Firebase Admin SDK.
 // Cloud Functions: auto-authenticates via the runtime service account (no config needed).
-// Local dev: set FIREBASE_SERVICE_ACCOUNT_JSON env var to the full contents of a
-//            Firebase service account key JSON file. Alternatively, set
-//            GOOGLE_APPLICATION_CREDENTIALS to the path of such a file.
+// Local dev / Replit: set FIREBASE_SERVICE_ACCOUNT_JSON secret to the full contents of a
+//                     Firebase service account key JSON file.
+//                     Alternatively, GOOGLE_APPLICATION_CREDENTIALS may point to such a file.
 if (!getApps().length) {
   const saJson = process.env["FIREBASE_SERVICE_ACCOUNT_JSON"];
   if (saJson) {
@@ -17,24 +15,10 @@ if (!getApps().length) {
     if (parsed.private_key && typeof parsed.private_key === "string") {
       parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
     }
-    console.log("[firebase-init] Using FIREBASE_SERVICE_ACCOUNT_JSON env var, project:", parsed.project_id, "client_email:", parsed.client_email);
     initializeApp({ credential: cert(parsed) });
   } else {
-    // Fall back to reading the service account key file committed to the repo.
-    const candidatePaths = [
-      resolve(process.cwd(), "../../kpark-edu-firebase-adminsdk-fbsvc-465cb297c2.json"),
-      resolve(process.cwd(), "../../../kpark-edu-firebase-adminsdk-fbsvc-465cb297c2.json"),
-      "/home/runner/workspace/kpark-edu-firebase-adminsdk-fbsvc-465cb297c2.json",
-    ];
-    const saPath = candidatePaths.find(existsSync);
-    if (saPath) {
-      console.log("[firebase-init] Using service account file:", saPath);
-      const saContent = JSON.parse(readFileSync(saPath, "utf-8"));
-      initializeApp({ credential: cert(saContent) });
-    } else {
-      console.log("[firebase-init] No credentials found, using ADC");
-      initializeApp();
-    }
+    // Fall back to ADC (covers GOOGLE_APPLICATION_CREDENTIALS and Cloud Functions runtime).
+    initializeApp();
   }
 }
 

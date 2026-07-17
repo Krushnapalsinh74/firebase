@@ -1,70 +1,37 @@
-# Yunora AI
+# Yunora AI Admin Panel
 
-AI-powered educational question generation admin panel for managing curriculum hierarchies and generating high-quality exam questions at scale.
-
-## Run & Operate
-
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 8080, proxied at `/api`)
-- `pnpm --filter @workspace/yunora-admin run dev` — run the admin frontend (port 25736, proxied at `/`)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+An AI-powered educational assessment admin panel for managing curriculum, standards, question banks, and AI content generation.
 
 ## Stack
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
-- Frontend: React + Vite, Tailwind CSS, shadcn/ui, Zustand, Recharts, Wouter, React Query
-- API: Express 5, JWT auth (jsonwebtoken + bcryptjs)
-- DB: PostgreSQL + Drizzle ORM
-- AI: GitHub Models API (multi-agent pipeline via setImmediate async jobs)
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- **Frontend**: React + Vite + Tailwind CSS + shadcn/ui (`artifacts/yunora-admin`)
+- **Backend**: Express.js API server (`artifacts/api-server`)
+- **Database**: Firebase Firestore (via `lib/db`)
+- **Auth**: JWT + Firebase Auth
+- **Shared libs**: `lib/api-spec`, `lib/api-zod`, `lib/api-client-react`, `lib/db`
+- **Package manager**: pnpm workspaces
 
-## Where things live
+## Running locally
 
-- `lib/api-spec/openapi.yaml` — Source-of-truth OpenAPI spec
-- `lib/db/src/schema/index.ts` — Drizzle DB schema (all tables)
-- `lib/api-client-react/src/` — Generated React Query hooks + custom-fetch
-- `artifacts/api-server/src/routes/` — All backend route handlers
-- `artifacts/yunora-admin/src/` — React frontend (pages, hooks, components)
+Both services start automatically via the configured workflows:
 
-## Architecture decisions
+| Service | Workflow | Port |
+|---------|----------|------|
+| Frontend | `artifacts/yunora-admin: web` | 25736 |
+| API server | `artifacts/api-server: API Server` | 8080 |
 
-- **Contract-first API**: OpenAPI spec → Orval codegen → typed React Query hooks used everywhere in frontend
-- **JWT auth**: Token stored in Zustand (persisted via localStorage key `yunora_token`); `setAuthTokenGetter` in custom-fetch injects it as Bearer header
-- **Async AI jobs**: `setImmediate` simulates async job queuing (no Redis/BullMQ required); status polled via GET `/api/generation/:id`
-- **5-agent AI pipeline**: Planner → Generator → Validator → Explainer → Ranker — each agent is a sequential GitHub Models API call within one job
-- **Path-based proxy routing**: All traffic through shared proxy; API at `/api`, frontend at `/`
+## Firebase / Firestore
 
-## Product
+The API server connects to Firebase Firestore using the `FIREBASE_SERVICE_ACCOUNT_JSON` secret (set in Replit Secrets). This must be the full JSON of a valid service account key for the `kpark-edu` Firebase project.
 
-- **Hierarchy management**: Boards → Standards → Subjects → Chapters → Topics (full CRUD with tree navigation)
-- **AI Question Generation**: Configure topic, question type, difficulty, count; AI pipeline generates + validates + ranks questions automatically
-- **Question Bank**: Browse all generated questions with filtering, search, bulk export
-- **Generation Jobs**: Monitor async AI job status in real-time
-- **AI Providers**: Manage GitHub Models API keys and model selection per provider
-- **Papers**: Assemble curated question sets into exam papers
-- **Analytics**: Charts for generation volume, question distribution, success rates
+To get a new key: Firebase Console → kpark-edu → ⚙️ Project settings → Service accounts → Generate new private key.
 
-## Default Admin
+The `FIREBASE_SERVICE_ACCOUNT_JSON` code path in `lib/db/src/firestore.ts` automatically fixes escaped `\n` in the private key, which can occur when pasting JSON into secrets forms.
 
-- Email: `admin@yunora.ai`
-- Password: `admin123`
+## Environment variables
+
+- `FIREBASE_SERVICE_ACCOUNT_JSON` — Firebase Admin SDK service account key JSON (Replit Secret)
+- `GOOGLE_APPLICATION_CREDENTIALS` — set to the path of the committed service account key file as a fallback
+- `JWT_SECRET`, `GOOGLE_TRANSLATION_API_KEY` — in `artifacts/api-server/.env`
 
 ## User preferences
-
-_Populate as you build — explicit user instructions worth remembering across sessions._
-
-## Gotchas
-
-- Run `pnpm --filter @workspace/api-spec run codegen` after any OpenAPI spec changes before touching frontend
-- Run `pnpm --filter @workspace/db run push` after schema changes in `lib/db/src/schema/`
-- The `bcryptjs` hash for seeding must be generated via the api-server's node (e.g., `node -e "require('./node_modules/bcryptjs').hash(...)"`)
-- AI generation requires a valid GitHub Models API key set on an AI Provider record in the DB
-
-## Pointers
-
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
