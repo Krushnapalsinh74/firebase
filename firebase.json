@@ -18,7 +18,7 @@
     ]
   },
   "functions": {
-    "source": "artifacts/api-server",
+    "source": "artifacts/api-server/dist",
     "runtime": "nodejs22"
   }
 }

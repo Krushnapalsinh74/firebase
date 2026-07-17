@@ -125,7 +125,46 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
   });
 }
 
-buildAll().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+async function writeFirebasePackageJson() {
+  const { writeFile, readFile } = await import("node:fs/promises");
+  const srcPkg = JSON.parse(
+    await readFile(path.resolve(artifactDir, "package.json"), "utf8")
+  );
+
+  // Only include truly-external deps (native/unbundleable) — workspace:* deps
+  // are already bundled by esbuild and must NOT appear here (npm rejects workspace: protocol).
+  const externalDeps = [
+    "firebase-admin",
+    "firebase-functions",
+    "@libsql/client",
+    "pino",
+    "pino-pretty",
+    "thread-stream",
+  ];
+
+  const deps = {};
+  for (const dep of externalDeps) {
+    if (srcPkg.dependencies?.[dep]) deps[dep] = srcPkg.dependencies[dep];
+  }
+
+  const distPkg = {
+    name: srcPkg.name,
+    version: srcPkg.version,
+    private: true,
+    type: "module",
+    main: "lambda.mjs",
+    dependencies: deps,
+  };
+
+  await writeFile(
+    path.resolve(artifactDir, "dist/package.json"),
+    JSON.stringify(distPkg, null, 2) + "\n"
+  );
+}
+
+buildAll()
+  .then(() => writeFirebasePackageJson())
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
