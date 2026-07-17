@@ -127,21 +127,24 @@ async function writeFirebaseFiles() {
     await readFile(path.resolve(artifactDir, "package.json"), "utf8")
   );
 
-  // firebase-admin and firebase-functions are now fully bundled by esbuild
-  // (no longer in the external list).  The ONLY runtime npm dep is
-  // @libsql/client — its native binary (@libsql/linux-x64-gnu) is installed
-  // automatically by npm as an optional dep of libsql.  A 1-package npm
-  // install is far less likely to trigger Cloud Build's "Exit handler never
-  // called!" crash than the previous 12-package list.
-  const libsqlVer = srcPkg.dependencies?.["@libsql/client"] ?? "^0.14.0";
-  const deps = { "@libsql/client": libsqlVer };
-
+  // @libsql/client is externalized by esbuild (native binary can't be bundled).
+  // Its native binary (@libsql/linux-x64-gnu) is installed by the predeploy
+  // `npm install --prefix artifacts/api-server/dist` step and Firebase uploads
+  // the resulting node_modules alongside the function source.
+  //
+  // We intentionally write empty `dependencies: {}` here so that Cloud Build's
+  // own `npm install` run is a no-op (nothing to install = no crash). The
+  // pre-installed node_modules that were uploaded with the source are used
+  // directly instead. Cloud Build's npm install was previously crashing with
+  // "Exit handler never called!" because @libsql/client's postinstall script
+  // tries to download a native binary inside Cloud Build's restricted network
+  // environment.
   const distPkg = {
     name: srcPkg.name,
     version: srcPkg.version,
     private: true,
     main: "lambda.mjs",
-    dependencies: deps,
+    dependencies: {},
   };
 
   const distDir = path.resolve(artifactDir, "dist");

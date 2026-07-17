@@ -1,0 +1,1 @@
+- [Firebase deploy process](firebase-deploy.md) — three non-obvious fixes needed to make firebase deploy work from Replit

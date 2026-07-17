@@ -27,7 +27,9 @@
     ],
     "predeploy": [
       "pnpm --filter @workspace/api-server run build",
-      "npm install --prefix artifacts/api-server/dist"
+      "npm install --prefix artifacts/api-server/dist @libsql/client",
+      "rm -f artifacts/api-server/dist/package-lock.json",
+      "cp lib/db/yunora.db artifacts/api-server/dist/yunora.db"
     ]
   }
 }
