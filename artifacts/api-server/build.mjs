@@ -188,14 +188,17 @@ async function writeFirebaseFiles() {
     JSON.stringify(distPkg, null, 2) + "\n"
   );
 
-  // .npmrc: legacy-peer-deps avoids npm 10.x resolution bugs on Cloud Build.
-  // omit=optional skips @libsql's platform-specific native binary packages
-  // (e.g. @libsql/linux-arm64-gnu) whose download failures crash npm on
-  // Cloud Build with "Exit handler never called!". Firebase Functions connects
-  // to Turso over HTTP so native SQLite binaries are not needed in production.
+  // .npmrc for Cloud Build:
+  // - legacy-peer-deps: avoids npm 10.x peer-dep resolution conflicts.
+  // - omit=optional: skips platform-specific @libsql binary packages for
+  //   other platforms (darwin, arm64); @libsql/linux-x64-gnu is listed
+  //   explicitly as a non-optional dep so it IS installed.
+  // - ignore-scripts: protobufjs (dep of firebase-functions) has a postinstall
+  //   script that crashes Cloud Build's npm with "Exit handler never called!".
+  //   Skipping scripts is safe — protobufjs falls back to pure JS automatically.
   await writeFile(
     path.join(distDir, ".npmrc"),
-    "legacy-peer-deps=true\nomit=optional\n"
+    "legacy-peer-deps=true\nomit=optional\nignore-scripts=true\n"
   );
 
   // Remove node_modules from dist if they exist (left by a local npm install
