@@ -1,7 +1,5 @@
 import { randomUUID } from "crypto";
-import { db } from "@workspace/db";
-import { topicsTable, chaptersTable } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { firestore, snapshotToArr } from "@workspace/db";
 
 // ─── Shared Types & Constants ────────────────────────────────────────────────
 
@@ -431,20 +429,18 @@ export async function planMicroTopics(
   }
 
   // ── Fast path: pull from database (zero AI cost) ───────────────────────────
-  const dbTopics = await db
-    .select({
-      name: topicsTable.name,
-      chapter: chaptersTable.name,
-      allowedCrossLinks: topicsTable.allowedCrossLinks,
-      difficulty: topicsTable.difficulty,
-    })
-    .from(topicsTable)
-    .innerJoin(chaptersTable, eq(topicsTable.chapterId, chaptersTable.id))
-    .where(
-      strictJeeOnly
-        ? and(eq(chaptersTable.name, ctx.chapterName), eq(topicsTable.isJeeSyllabus, true))
-        : eq(chaptersTable.name, ctx.chapterName)
-    );
+  // Topics store chapterName as a denormalized field for fast lookup.
+  let topicQuery: FirebaseFirestore.Query = firestore
+    .collection("topics")
+    .where("chapterName", "==", ctx.chapterName);
+  if (strictJeeOnly) topicQuery = topicQuery.where("isJeeSyllabus", "==", true);
+  const rawTopics = snapshotToArr(await topicQuery.get()) as any[];
+  const dbTopics = rawTopics.map((t) => ({
+    name: t.name,
+    chapter: t.chapterName ?? ctx.chapterName,
+    allowedCrossLinks: t.allowedCrossLinks ?? null,
+    difficulty: t.difficulty ?? null,
+  }));
 
   if (dbTopics.length >= 3) {
     const topics: MicroTopic[] = dbTopics.map(t => ({

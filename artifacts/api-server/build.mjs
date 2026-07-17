@@ -38,8 +38,12 @@ async function buildAll() {
       "canvas",
       "bcrypt",
       "argon2",
-      "@libsql/client",
-      "libsql",
+      // firebase-admin is pre-installed in the dist folder during predeploy
+      // (npm install --prefix artifacts/api-server/dist firebase-admin)
+      // so we externalize it to avoid bundling its large dependency tree.
+      "firebase-admin",
+      "firebase-admin/*",
+      "@google-cloud/firestore",
       "fsevents",
       "re2",
       "farmhash",

@@ -1,20 +1,18 @@
 import { Router } from "express";
-import { db } from "@workspace/db";
-import { aiProvidersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { firestore, nextId, docToObj, snapshotToArr, nowTs } from "@workspace/db";
 import { requireAuth, simpleEncrypt, simpleDecrypt } from "../lib/auth.js";
 
 const router = Router();
 
-function safeProvider(p: typeof aiProvidersTable.$inferSelect) {
+function safeProvider(p: Record<string, any>) {
   const { encryptedToken, ...rest } = p;
   return rest;
 }
 
 router.get("/ai-providers", requireAuth, async (req, res) => {
   try {
-    const providers = await db.select().from(aiProvidersTable).orderBy(aiProvidersTable.name);
-    res.json(providers.map(safeProvider));
+    const snap = await firestore.collection("aiProviders").orderBy("name").get();
+    res.json(snapshotToArr(snap).map(safeProvider));
   } catch (err) {
     req.log.error({ err }, "List AI providers error");
     res.status(500).json({ error: "Internal server error" });
@@ -25,12 +23,15 @@ router.post("/ai-providers", requireAuth, async (req, res) => {
   try {
     const { name, providerType, accessToken, defaultModel, availableModels = [], isActive = true } = req.body;
     const encryptedToken = simpleEncrypt(accessToken);
-    const [provider] = await db.insert(aiProvidersTable).values({
-      name, providerType, encryptedToken, defaultModel,
+    const id = await nextId("aiProviders");
+    const now = nowTs();
+    const data = {
+      id, name, providerType, encryptedToken, defaultModel,
       availableModels: availableModels.length > 0 ? availableModels : getDefaultModels(providerType),
-      isActive,
-    }).returning();
-    res.status(201).json(safeProvider(provider));
+      isActive, createdAt: now, updatedAt: now,
+    };
+    await firestore.collection("aiProviders").doc(String(id)).set(data);
+    res.status(201).json(safeProvider({ ...data, createdAt: now.toDate().toISOString(), updatedAt: now.toDate().toISOString() }));
   } catch (err) {
     req.log.error({ err }, "Create AI provider error");
     res.status(500).json({ error: "Internal server error" });
@@ -39,17 +40,19 @@ router.post("/ai-providers", requireAuth, async (req, res) => {
 
 router.patch("/ai-providers/:id", requireAuth, async (req, res) => {
   try {
-    const id = parseInt((req.params["id"] as string));
+    const id = parseInt(req.params["id"] as string);
     const { name, accessToken, defaultModel, availableModels, isActive } = req.body;
-    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    const ref = firestore.collection("aiProviders").doc(String(id));
+    if (!(await ref.get()).exists) { res.status(404).json({ error: "Provider not found" }); return; }
+    const updates: Record<string, unknown> = { updatedAt: nowTs() };
     if (name !== undefined) updates["name"] = name;
     if (accessToken !== undefined) updates["encryptedToken"] = simpleEncrypt(accessToken);
     if (defaultModel !== undefined) updates["defaultModel"] = defaultModel;
     if (availableModels !== undefined) updates["availableModels"] = availableModels;
     if (isActive !== undefined) updates["isActive"] = isActive;
-    const [provider] = await db.update(aiProvidersTable).set(updates).where(eq(aiProvidersTable.id, id)).returning();
-    if (!provider) { res.status(404).json({ error: "Provider not found" }); return; }
-    res.json(safeProvider(provider));
+    await ref.update(updates);
+    const p = docToObj(await ref.get())!;
+    res.json(safeProvider(p));
   } catch (err) {
     req.log.error({ err }, "Update AI provider error");
     res.status(500).json({ error: "Internal server error" });
@@ -58,8 +61,8 @@ router.patch("/ai-providers/:id", requireAuth, async (req, res) => {
 
 router.delete("/ai-providers/:id", requireAuth, async (req, res) => {
   try {
-    const id = parseInt((req.params["id"] as string));
-    await db.delete(aiProvidersTable).where(eq(aiProvidersTable.id, id));
+    const id = parseInt(req.params["id"] as string);
+    await firestore.collection("aiProviders").doc(String(id)).delete();
     res.status(204).send();
   } catch (err) {
     req.log.error({ err }, "Delete AI provider error");
@@ -69,25 +72,18 @@ router.delete("/ai-providers/:id", requireAuth, async (req, res) => {
 
 router.post("/ai-providers/:id/test", requireAuth, async (req, res) => {
   try {
-    const id = parseInt((req.params["id"] as string));
-    const [provider] = await db.select().from(aiProvidersTable).where(eq(aiProvidersTable.id, id)).limit(1);
-    if (!provider) { res.status(404).json({ error: "Provider not found" }); return; }
-
+    const id = parseInt(req.params["id"] as string);
+    const doc = await firestore.collection("aiProviders").doc(String(id)).get();
+    if (!doc.exists) { res.status(404).json({ error: "Provider not found" }); return; }
+    const provider = doc.data() as any;
     const token = simpleDecrypt(provider.encryptedToken);
     const start = Date.now();
 
     if (provider.providerType === "github_models") {
       const response = await fetch("https://models.inference.ai.azure.com/chat/completions", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          model: provider.defaultModel,
-          messages: [{ role: "user", content: "Say hello in one word." }],
-          max_tokens: 10,
-        }),
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ model: provider.defaultModel, messages: [{ role: "user", content: "Say hello in one word." }], max_tokens: 10 }),
       });
       const latencyMs = Date.now() - start;
       if (!response.ok) {

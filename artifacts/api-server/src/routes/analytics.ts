@@ -1,61 +1,61 @@
 import { Router } from "express";
-import { db, sqlite } from "@workspace/db";
-import {
-  questionsTable, subjectsTable, chaptersTable, topicsTable,
-  boardsTable, standardsTable, aiProvidersTable, papersTable,
-  generationJobsTable, activityLogsTable,
-} from "@workspace/db";
-import { count, sql, avg, gte, and } from "drizzle-orm";
+import { firestore, snapshotToArr } from "@workspace/db";
 import { requireAuth } from "../lib/auth.js";
 
 const router = Router();
 
 router.get("/analytics/dashboard", requireAuth, async (req, res) => {
   try {
-    const [{ totalQuestions }] = await db.select({ totalQuestions: count() }).from(questionsTable);
-    const [{ totalSubjects }] = await db.select({ totalSubjects: count() }).from(subjectsTable);
-    const [{ totalChapters }] = await db.select({ totalChapters: count() }).from(chaptersTable);
-    const [{ totalTopics }] = await db.select({ totalTopics: count() }).from(topicsTable);
-    const [{ totalBoards }] = await db.select({ totalBoards: count() }).from(boardsTable);
-    const [{ totalStandards }] = await db.select({ totalStandards: count() }).from(standardsTable);
-    const [{ activeProviders }] = await db.select({ activeProviders: count() }).from(aiProvidersTable);
-    const [{ totalPapers }] = await db.select({ totalPapers: count() }).from(papersTable);
-
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
 
-    const [{ questionsToday }] = await db.select({ questionsToday: count() })
-      .from(questionsTable).where(gte(questionsTable.generatedAt, today));
-    const [{ questionsThisMonth }] = await db.select({ questionsThisMonth: count() })
-      .from(questionsTable).where(gte(questionsTable.generatedAt, monthStart));
+    const [
+      qSnap, subSnap, chapSnap, topSnap, boardSnap, stdSnap, provSnap, paperSnap,
+      jobSnap, actSnap,
+    ] = await Promise.all([
+      firestore.collection("questions").get(),
+      firestore.collection("subjects").get(),
+      firestore.collection("chapters").get(),
+      firestore.collection("topics").get(),
+      firestore.collection("boards").get(),
+      firestore.collection("standards").get(),
+      firestore.collection("aiProviders").get(),
+      firestore.collection("papers").get(),
+      firestore.collection("generationJobs").get(),
+      firestore.collection("activityLogs").get(),
+    ]);
 
-    const [{ avgQualityScore }] = await db.select({ avgQualityScore: avg(questionsTable.qualityScore) }).from(questionsTable);
+    const questions = snapshotToArr(qSnap) as any[];
+    const jobs      = snapshotToArr(jobSnap) as any[];
 
-    const [{ totalJobsRunning }] = await db.select({ totalJobsRunning: count() })
-      .from(generationJobsTable).where(sql`${generationJobsTable.status} IN ('pending', 'processing')`);
-      
-    const [{ totalInputTokens, totalOutputTokens, totalCost }] = await db.select({
-      totalInputTokens: sql<number>`SUM(${generationJobsTable.inputTokens})`,
-      totalOutputTokens: sql<number>`SUM(${generationJobsTable.outputTokens})`,
-      totalCost: sql<number>`SUM(${generationJobsTable.totalCostInr})`
-    }).from(generationJobsTable);
+    const todayMs       = today.getTime();
+    const monthStartMs  = monthStart.getTime();
+    const questionsToday      = questions.filter((q) => new Date(q.generatedAt).getTime() >= todayMs).length;
+    const questionsThisMonth  = questions.filter((q) => new Date(q.generatedAt).getTime() >= monthStartMs).length;
+    const avgQualityScore     = questions.length > 0
+      ? questions.reduce((s, q) => s + (q.qualityScore ?? 0), 0) / questions.length
+      : 0;
+    const totalJobsRunning    = jobs.filter((j) => j.status === "pending" || j.status === "processing").length;
+    const totalInputTokens    = jobs.reduce((s, j) => s + (j.inputTokens  ?? 0), 0);
+    const totalOutputTokens   = jobs.reduce((s, j) => s + (j.outputTokens ?? 0), 0);
+    const totalCostInr        = jobs.reduce((s, j) => s + (j.totalCostInr ?? 0), 0);
 
     res.json({
-      totalQuestions: Number(totalQuestions),
-      totalSubjects: Number(totalSubjects),
-      totalChapters: Number(totalChapters),
-      totalTopics: Number(totalTopics),
-      questionsToday: Number(questionsToday),
-      questionsThisMonth: Number(questionsThisMonth),
-      totalBoards: Number(totalBoards),
-      totalStandards: Number(totalStandards),
-      activeProviders: Number(activeProviders),
-      totalPapers: Number(totalPapers),
-      avgQualityScore: parseFloat(String(avgQualityScore ?? 0)),
-      totalJobsRunning: Number(totalJobsRunning),
-      totalInputTokens: Number(totalInputTokens ?? 0),
-      totalOutputTokens: Number(totalOutputTokens ?? 0),
-      totalCostInr: parseFloat(String(totalCost ?? 0)),
+      totalQuestions:   qSnap.size,
+      totalSubjects:    subSnap.size,
+      totalChapters:    chapSnap.size,
+      totalTopics:      topSnap.size,
+      questionsToday,
+      questionsThisMonth,
+      totalBoards:      boardSnap.size,
+      totalStandards:   stdSnap.size,
+      activeProviders:  provSnap.size,
+      totalPapers:      paperSnap.size,
+      avgQualityScore:  parseFloat(avgQualityScore.toFixed(4)),
+      totalJobsRunning,
+      totalInputTokens,
+      totalOutputTokens,
+      totalCostInr:     parseFloat(totalCostInr.toFixed(4)),
     });
   } catch (err) {
     req.log.error({ err }, "Dashboard stats error");
@@ -65,14 +65,28 @@ router.get("/analytics/dashboard", requireAuth, async (req, res) => {
 
 router.get("/analytics/questions-by-subject", requireAuth, async (req, res) => {
   try {
-    const rows = await db
-      .select({ subjectName: subjectsTable.name, count: count() })
-      .from(questionsTable)
-      .leftJoin(subjectsTable, sql`${questionsTable.subjectId} = ${subjectsTable.id}`)
-      .groupBy(subjectsTable.name)
-      .orderBy(sql`count(*) DESC`)
-      .limit(10);
-    res.json(rows.map(r => ({ subjectName: r.subjectName ?? "Unknown", count: Number(r.count) })));
+    const snap = await firestore.collection("questions").get();
+    const questions = snapshotToArr(snap) as any[];
+
+    const subjectIds = [...new Set(questions.map((q) => q.subjectId).filter(Boolean))];
+    const subjectDocs = await Promise.all(
+      subjectIds.map((id) => firestore.collection("subjects").doc(String(id)).get())
+    );
+    const subjectMap: Record<number, string> = {};
+    subjectDocs.forEach((d) => { if (d.exists) subjectMap[parseInt(d.id)] = d.data()?.name ?? "Unknown"; });
+
+    const counts: Record<string, number> = {};
+    questions.forEach((q) => {
+      const name = q.subjectId ? (subjectMap[q.subjectId] ?? "Unknown") : "Unknown";
+      counts[name] = (counts[name] ?? 0) + 1;
+    });
+
+    const rows = Object.entries(counts)
+      .map(([subjectName, count]) => ({ subjectName, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    res.json(rows);
   } catch (err) {
     req.log.error({ err }, "Questions by subject error");
     res.status(500).json({ error: "Internal server error" });
@@ -81,12 +95,20 @@ router.get("/analytics/questions-by-subject", requireAuth, async (req, res) => {
 
 router.get("/analytics/questions-by-difficulty", requireAuth, async (req, res) => {
   try {
-    const rows = await db
-      .select({ difficulty: questionsTable.difficulty, count: count() })
-      .from(questionsTable)
-      .groupBy(questionsTable.difficulty)
-      .orderBy(questionsTable.difficulty);
-    res.json(rows.map(r => ({ difficulty: r.difficulty, count: Number(r.count) })));
+    const snap = await firestore.collection("questions").get();
+    const questions = snapshotToArr(snap) as any[];
+
+    const counts: Record<string, number> = {};
+    questions.forEach((q) => {
+      const d = q.difficulty ?? "unknown";
+      counts[d] = (counts[d] ?? 0) + 1;
+    });
+
+    const rows = Object.entries(counts)
+      .map(([difficulty, count]) => ({ difficulty, count }))
+      .sort((a, b) => a.difficulty.localeCompare(b.difficulty));
+
+    res.json(rows);
   } catch (err) {
     req.log.error({ err }, "Questions by difficulty error");
     res.status(500).json({ error: "Internal server error" });
@@ -95,23 +117,29 @@ router.get("/analytics/questions-by-difficulty", requireAuth, async (req, res) =
 
 router.get("/analytics/model-usage", requireAuth, async (req, res) => {
   try {
-    const rows = await db
-      .select({
-        model: questionsTable.modelUsed,
-        count: count(),
-        avgQualityScore: avg(questionsTable.qualityScore),
-      })
-      .from(questionsTable)
-      .where(sql`${questionsTable.modelUsed} IS NOT NULL`)
-      .groupBy(questionsTable.modelUsed)
-      .orderBy(sql`count(*) DESC`)
-      .limit(10);
-    res.json(rows.map(r => ({
-      model: r.model ?? "Unknown",
-      provider: "github_models",
-      count: Number(r.count),
-      avgQualityScore: parseFloat(String(r.avgQualityScore ?? 0)),
-    })));
+    const snap = await firestore.collection("questions").get();
+    const questions = snapshotToArr(snap) as any[];
+
+    const modelData: Record<string, { count: number; totalQuality: number }> = {};
+    questions.forEach((q) => {
+      const m = q.modelUsed;
+      if (!m) return;
+      if (!modelData[m]) modelData[m] = { count: 0, totalQuality: 0 };
+      modelData[m]!.count++;
+      modelData[m]!.totalQuality += q.qualityScore ?? 0;
+    });
+
+    const rows = Object.entries(modelData)
+      .map(([model, { count, totalQuality }]) => ({
+        model,
+        provider: "github_models",
+        count,
+        avgQualityScore: parseFloat((totalQuality / count).toFixed(4)),
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    res.json(rows);
   } catch (err) {
     req.log.error({ err }, "Model usage error");
     res.status(500).json({ error: "Internal server error" });
@@ -121,15 +149,10 @@ router.get("/analytics/model-usage", requireAuth, async (req, res) => {
 router.get("/analytics/recent-activity", requireAuth, async (req, res) => {
   try {
     const limit = Math.min(50, parseInt((req.query["limit"] as string) ?? "10"));
-    const logs = await db.select().from(activityLogsTable).orderBy(sql`${activityLogsTable.createdAt} DESC`).limit(limit);
-    res.json(logs.map(l => ({
-      id: l.id,
-      jobId: l.jobId,
-      action: l.action,
-      description: l.description,
-      questionsGenerated: l.questionsGenerated,
-      model: l.model,
-      createdAt: l.createdAt,
+    const snap = await firestore.collection("activityLogs").orderBy("createdAt", "desc").limit(limit).get();
+    res.json(snapshotToArr(snap).map((l: any) => ({
+      id: l.id, jobId: l.jobId, action: l.action, description: l.description,
+      questionsGenerated: l.questionsGenerated, model: l.model, createdAt: l.createdAt,
     })));
   } catch (err) {
     req.log.error({ err }, "Recent activity error");
@@ -139,25 +162,34 @@ router.get("/analytics/recent-activity", requireAuth, async (req, res) => {
 
 router.get("/analytics/monthly-report", requireAuth, async (req, res) => {
   try {
-    const result = await sqlite.execute(`
-      SELECT
-        CAST(strftime('%m', generated_at / 1000, 'unixepoch') AS INTEGER) AS month,
-        CAST(strftime('%Y', generated_at / 1000, 'unixepoch') AS INTEGER) AS year,
-        COUNT(*) AS count,
-        ROUND(AVG(quality_score), 2) AS avg_quality_score
-      FROM questions
-      WHERE generated_at >= (strftime('%s', 'now', '-12 months') * 1000)
-      GROUP BY month, year
-      ORDER BY year, month
-    `);
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    res.json(result.rows.map((row: any) => ({
-      month: Number(row.month),
-      year: Number(row.year),
-      label: `${months[Number(row.month) - 1]} ${row.year}`,
-      count: Number(row.count),
-      avgQualityScore: parseFloat(String(row.avg_quality_score ?? 0)),
-    })));
+    const cutoff = new Date();
+    cutoff.setFullYear(cutoff.getFullYear() - 1);
+
+    const snap = await firestore.collection("questions").get();
+    const questions = snapshotToArr(snap) as any[];
+
+    const monthly: Record<string, { count: number; totalQuality: number }> = {};
+    questions.forEach((q) => {
+      const d = q.generatedAt ? new Date(q.generatedAt) : null;
+      if (!d || d < cutoff) return;
+      const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
+      if (!monthly[key]) monthly[key] = { count: 0, totalQuality: 0 };
+      monthly[key]!.count++;
+      monthly[key]!.totalQuality += q.qualityScore ?? 0;
+    });
+
+    const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const rows = Object.entries(monthly).map(([key, { count, totalQuality }]) => {
+      const [year, month] = key.split("-").map(Number);
+      return {
+        month, year: year!,
+        label: `${monthNames[(month ?? 1) - 1]} ${year}`,
+        count,
+        avgQualityScore: parseFloat((totalQuality / count).toFixed(2)),
+      };
+    }).sort((a, b) => a.year !== b.year ? a.year - b.year : (a.month ?? 0) - (b.month ?? 0));
+
+    res.json(rows);
   } catch (err) {
     req.log.error({ err }, "Monthly report error");
     res.status(500).json({ error: "Internal server error" });
@@ -166,38 +198,53 @@ router.get("/analytics/monthly-report", requireAuth, async (req, res) => {
 
 router.get("/analytics/topic-coverage", requireAuth, async (req, res) => {
   try {
-    const result = await sqlite.execute(`
-      SELECT
-        t.id            AS topic_id,
-        t.name          AS topic_name,
-        c.name          AS chapter_name,
-        s.name          AS subject_name,
-        COUNT(q.id)     AS total,
-        SUM(CASE WHEN q.difficulty = 'easy'     THEN 1 ELSE 0 END) AS easy,
-        SUM(CASE WHEN q.difficulty = 'medium'   THEN 1 ELSE 0 END) AS medium,
-        SUM(CASE WHEN q.difficulty = 'hard'     THEN 1 ELSE 0 END) AS hard,
-        SUM(CASE WHEN q.difficulty = 'advanced' THEN 1 ELSE 0 END) AS advanced,
-        ROUND(AVG(q.quality_score), 2) AS avg_quality
-      FROM topics t
-      LEFT JOIN chapters  c ON c.id = t.chapter_id
-      LEFT JOIN subjects  s ON s.id = c.subject_id
-      LEFT JOIN questions q ON q.topic_id = t.id
-      WHERE t.is_active = 1
-      GROUP BY t.id, t.name, c.name, s.name
-      ORDER BY total DESC, t.name
-    `);
-    res.json(result.rows.map((row: any) => ({
-      topicId:     Number(row.topic_id),
-      topicName:   String(row.topic_name ?? ""),
-      chapterName: String(row.chapter_name ?? ""),
-      subjectName: String(row.subject_name ?? ""),
-      total:       Number(row.total),
-      easy:        Number(row.easy),
-      medium:      Number(row.medium),
-      hard:        Number(row.hard),
-      advanced:    Number(row.advanced),
-      avgQuality:  parseFloat(String(row.avg_quality ?? "0")),
-    })));
+    const [topicsSnap, questionsSnap] = await Promise.all([
+      firestore.collection("topics").where("isActive", "==", true).get(),
+      firestore.collection("questions").get(),
+    ]);
+
+    const topics  = snapshotToArr(topicsSnap) as any[];
+    const questions = snapshotToArr(questionsSnap) as any[];
+
+    // Index questions by topicId
+    const byTopic: Record<number, any[]> = {};
+    questions.forEach((q) => {
+      if (!q.topicId) return;
+      if (!byTopic[q.topicId]) byTopic[q.topicId] = [];
+      byTopic[q.topicId]!.push(q);
+    });
+
+    // Fetch chapters and subjects for enrichment (batch)
+    const chapterIds = [...new Set(topics.map((t) => t.chapterId).filter(Boolean))];
+    const chapterDocs = await Promise.all(chapterIds.map((id) => firestore.collection("chapters").doc(String(id)).get()));
+    const chapterMap: Record<number, any> = {};
+    chapterDocs.forEach((d) => { if (d.exists) chapterMap[parseInt(d.id)] = d.data(); });
+
+    const subjectIds = [...new Set(Object.values(chapterMap).map((c: any) => c.subjectId).filter(Boolean))];
+    const subjectDocs = await Promise.all(subjectIds.map((id) => firestore.collection("subjects").doc(String(id)).get()));
+    const subjectMap: Record<number, any> = {};
+    subjectDocs.forEach((d) => { if (d.exists) subjectMap[parseInt(d.id)] = d.data(); });
+
+    const rows = topics.map((t) => {
+      const tqs = byTopic[t.id] ?? [];
+      const chapter = chapterMap[t.chapterId];
+      const subject  = chapter ? subjectMap[chapter.subjectId] : null;
+      const totalQuality = tqs.reduce((s, q) => s + (q.qualityScore ?? 0), 0);
+      return {
+        topicId:     t.id,
+        topicName:   t.name ?? "",
+        chapterName: chapter?.name ?? "",
+        subjectName: subject?.name ?? "",
+        total:    tqs.length,
+        easy:     tqs.filter((q) => q.difficulty === "easy").length,
+        medium:   tqs.filter((q) => q.difficulty === "medium").length,
+        hard:     tqs.filter((q) => q.difficulty === "hard").length,
+        advanced: tqs.filter((q) => q.difficulty === "advanced").length,
+        avgQuality: tqs.length > 0 ? parseFloat((totalQuality / tqs.length).toFixed(2)) : 0,
+      };
+    }).sort((a, b) => b.total - a.total || a.topicName.localeCompare(b.topicName));
+
+    res.json(rows);
   } catch (err) {
     req.log.error({ err }, "Topic coverage error");
     res.status(500).json({ error: "Internal server error" });
@@ -206,29 +253,24 @@ router.get("/analytics/topic-coverage", requireAuth, async (req, res) => {
 
 router.get("/analytics/quality-distribution", requireAuth, async (req, res) => {
   try {
-    const result = await sqlite.execute(`
-      SELECT
-        CASE
-          WHEN quality_score >= 0.9  THEN 'Excellent (0.9–1.0)'
-          WHEN quality_score >= 0.75 THEN 'Good (0.75–0.9)'
-          WHEN quality_score >= 0.5  THEN 'Fair (0.5–0.75)'
-          ELSE                            'Poor (<0.5)'
-        END AS band,
-        CASE
-          WHEN quality_score >= 0.9  THEN 1
-          WHEN quality_score >= 0.75 THEN 2
-          WHEN quality_score >= 0.5  THEN 3
-          ELSE                            4
-        END AS sort_order,
-        COUNT(*) AS count
-      FROM questions
-      GROUP BY band, sort_order
-      ORDER BY sort_order
-    `);
-    res.json(result.rows.map((row: any) => ({
-      band: String(row.band),
-      count: Number(row.count)
-    })));
+    const snap = await firestore.collection("questions").get();
+    const questions = snapshotToArr(snap) as any[];
+
+    const bands: Record<string, number> = {
+      "Excellent (0.9–1.0)": 0,
+      "Good (0.75–0.9)":     0,
+      "Fair (0.5–0.75)":     0,
+      "Poor (<0.5)":         0,
+    };
+    questions.forEach((q) => {
+      const s = q.qualityScore ?? 0;
+      if (s >= 0.9)  bands["Excellent (0.9–1.0)"]!++;
+      else if (s >= 0.75) bands["Good (0.75–0.9)"]!++;
+      else if (s >= 0.5)  bands["Fair (0.5–0.75)"]!++;
+      else                bands["Poor (<0.5)"]!++;
+    });
+
+    res.json(Object.entries(bands).map(([band, count]) => ({ band, count })));
   } catch (err) {
     req.log.error({ err }, "Quality distribution error");
     res.status(500).json({ error: "Internal server error" });

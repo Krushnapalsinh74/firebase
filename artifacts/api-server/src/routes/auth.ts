@@ -1,8 +1,6 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import { db } from "@workspace/db";
-import { usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { firestore, docToObj, snapshotToArr } from "@workspace/db";
 import { signToken, requireAuth } from "../lib/auth.js";
 
 const router = Router();
@@ -14,7 +12,12 @@ router.post("/auth/login", async (req, res) => {
       res.status(400).json({ error: "Email and password are required" });
       return;
     }
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
+    const snap = await firestore.collection("users").where("email", "==", email).limit(1).get();
+    if (snap.empty) {
+      res.status(401).json({ error: "Invalid credentials" });
+      return;
+    }
+    const user = docToObj(snap.docs[0]!) as any;
     if (!user || !user.isActive) {
       res.status(401).json({ error: "Invalid credentials" });
       return;
@@ -37,8 +40,9 @@ router.post("/auth/login", async (req, res) => {
 
 router.get("/auth/me", requireAuth, async (req, res) => {
   try {
-    const user = (req as typeof req & { user: { userId: number } }).user;
-    const [found] = await db.select().from(usersTable).where(eq(usersTable.id, user.userId)).limit(1);
+    const user = (req as any).user as { userId: number };
+    const doc = await firestore.collection("users").doc(String(user.userId)).get();
+    const found = docToObj(doc);
     if (!found) {
       res.status(404).json({ error: "User not found" });
       return;

@@ -1,43 +1,51 @@
 import { Router } from "express";
-import { db } from "@workspace/db";
-import { subjectsTable, standardsTable, boardsTable, chaptersTable, questionsTable } from "@workspace/db";
-import { eq, like, and, count } from "drizzle-orm";
+import { firestore, nextId, docToObj, snapshotToArr, nowTs } from "@workspace/db";
 import { requireAuth } from "../lib/auth.js";
 
 const router = Router();
 
 router.get("/subjects", requireAuth, async (req, res) => {
   try {
-    const { standardId, boardId, search, page = "1", limit = "20" } = req.query as Record<string, string>;
+    const { standardId, search, page = "1", limit = "20" } = req.query as Record<string, string>;
     const pageNum = Math.max(1, parseInt(page));
     const limitNum = Math.min(100, parseInt(limit));
-    const offset = (pageNum - 1) * limitNum;
 
-    const conditions = [];
-    if (standardId) conditions.push(eq(subjectsTable.standardId, parseInt(standardId)));
-    if (search) conditions.push(like(subjectsTable.name, `%${search}%`));
-    const where = conditions.length > 0 ? and(...conditions) : undefined;
+    let query: FirebaseFirestore.Query = firestore.collection("subjects");
+    if (standardId) query = query.where("standardId", "==", parseInt(standardId));
+    query = query.orderBy("name");
 
-    const [{ total }] = await db.select({ total: count() }).from(subjectsTable).where(where);
-    const rows = await db
-      .select({ s: subjectsTable, standardName: standardsTable.name, boardId: boardsTable.id, boardName: boardsTable.name })
-      .from(subjectsTable)
-      .leftJoin(standardsTable, eq(subjectsTable.standardId, standardsTable.id))
-      .leftJoin(boardsTable, eq(standardsTable.boardId, boardsTable.id))
-      .where(where)
-      .limit(limitNum)
-      .offset(offset)
-      .orderBy(subjectsTable.name);
+    let subjects = snapshotToArr(await query.get()) as any[];
+    if (search) {
+      const q = search.toLowerCase();
+      subjects = subjects.filter((s) => s.name.toLowerCase().includes(q));
+    }
+
+    const total = subjects.length;
+    const page_subjects = subjects.slice((pageNum - 1) * limitNum, pageNum * limitNum);
 
     const withCounts = await Promise.all(
-      rows.map(async ({ s, standardName, boardId: bId, boardName }) => {
-        const [{ chapters }] = await db.select({ chapters: count() }).from(chaptersTable).where(eq(chaptersTable.subjectId, s.id));
-        const [{ questions }] = await db.select({ questions: count() }).from(questionsTable).where(eq(questionsTable.subjectId, s.id));
-        return { ...s, standardName, boardId: bId, boardName, chaptersCount: Number(chapters), questionsCount: Number(questions) };
+      page_subjects.map(async (s) => {
+        const [standardDoc, chapCnt, qCnt] = await Promise.all([
+          s.standardId ? firestore.collection("standards").doc(String(s.standardId)).get() : Promise.resolve(null),
+          firestore.collection("chapters").where("subjectId", "==", s.id).get().then((r) => r.size),
+          firestore.collection("questions").where("subjectId", "==", s.id).get().then((r) => r.size),
+        ]);
+        const standard = standardDoc?.exists ? standardDoc.data() : null;
+        const board = standard?.boardId
+          ? (await firestore.collection("boards").doc(String(standard.boardId)).get()).data()
+          : null;
+        return {
+          ...s,
+          standardName: standard?.name ?? null,
+          boardId: standard?.boardId ?? null,
+          boardName: board?.name ?? null,
+          chaptersCount: chapCnt,
+          questionsCount: qCnt,
+        };
       })
     );
 
-    res.json({ data: withCounts, total: Number(total), page: pageNum, limit: limitNum });
+    res.json({ data: withCounts, total, page: pageNum, limit: limitNum });
   } catch (err) {
     req.log.error({ err }, "List subjects error");
     res.status(500).json({ error: "Internal server error" });
@@ -47,8 +55,11 @@ router.get("/subjects", requireAuth, async (req, res) => {
 router.post("/subjects", requireAuth, async (req, res) => {
   try {
     const { name, code, standardId, isActive = true } = req.body;
-    const [s] = await db.insert(subjectsTable).values({ name, code, standardId, isActive }).returning();
-    res.status(201).json({ ...s, standardName: null, boardId: null, boardName: null, chaptersCount: 0, questionsCount: 0 });
+    const id = await nextId("subjects");
+    const now = nowTs();
+    const data = { id, name, code, standardId, isActive, createdAt: now, updatedAt: now };
+    await firestore.collection("subjects").doc(String(id)).set(data);
+    res.status(201).json({ ...data, createdAt: now.toDate().toISOString(), updatedAt: now.toDate().toISOString(), standardName: null, boardId: null, boardName: null, chaptersCount: 0, questionsCount: 0 });
   } catch (err) {
     req.log.error({ err }, "Create subject error");
     res.status(500).json({ error: "Internal server error" });
@@ -57,14 +68,16 @@ router.post("/subjects", requireAuth, async (req, res) => {
 
 router.patch("/subjects/:id", requireAuth, async (req, res) => {
   try {
-    const id = parseInt((req.params["id"] as string));
+    const id = parseInt(req.params["id"] as string);
     const { name, code, isActive } = req.body;
-    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    const ref = firestore.collection("subjects").doc(String(id));
+    if (!(await ref.get()).exists) { res.status(404).json({ error: "Subject not found" }); return; }
+    const updates: Record<string, unknown> = { updatedAt: nowTs() };
     if (name !== undefined) updates["name"] = name;
     if (code !== undefined) updates["code"] = code;
     if (isActive !== undefined) updates["isActive"] = isActive;
-    const [s] = await db.update(subjectsTable).set(updates).where(eq(subjectsTable.id, id)).returning();
-    if (!s) { res.status(404).json({ error: "Subject not found" }); return; }
+    await ref.update(updates);
+    const s = docToObj(await ref.get())!;
     res.json({ ...s, standardName: null, boardId: null, boardName: null, chaptersCount: 0, questionsCount: 0 });
   } catch (err) {
     req.log.error({ err }, "Update subject error");
@@ -74,8 +87,8 @@ router.patch("/subjects/:id", requireAuth, async (req, res) => {
 
 router.delete("/subjects/:id", requireAuth, async (req, res) => {
   try {
-    const id = parseInt((req.params["id"] as string));
-    await db.delete(subjectsTable).where(eq(subjectsTable.id, id));
+    const id = parseInt(req.params["id"] as string);
+    await firestore.collection("subjects").doc(String(id)).delete();
     res.status(204).send();
   } catch (err) {
     req.log.error({ err }, "Delete subject error");
