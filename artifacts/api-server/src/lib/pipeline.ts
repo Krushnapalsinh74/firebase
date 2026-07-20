@@ -53,7 +53,7 @@ export interface GenerationRequest {
   questionType: string;
   difficulty: string;
   jeeAdvancedOnly?: boolean;
-  includeDiagrams?: boolean;
+  includeDiagrams?: 'no' | 'yes' | 'ai';
 }
 
 const OFF_SYLLABUS_KEYWORDS = [
@@ -541,10 +541,12 @@ Rules:
 - Ensure exactly one correct option (unless multiple choice).
 - Options should be distinct mathematical expressions.
 - CRITICAL: ALL mathematical variables, vectors, and equations MUST be wrapped in single $ signs (e.g., $\\\\vec{a}$ or $x^2 + y^2 = 1$).
-${ params.includeDiagrams
+${ params.includeDiagrams === 'yes'
   ? `- If a diagram genuinely helps the question, provide it in the "diagram" JSON field.
 - For biology/anatomy, use type "wikimedia" and provide a highly specific "search" term (e.g. "human heart cross section").
 - For math/physics/geometry, use type "svg" and provide raw, clean SVG code in "content". Only use basic shapes (path, rect, circle, line, text) and ensure viewBox is set.`
+  : params.includeDiagrams === 'ai'
+  ? `- Decide for yourself whether a diagram would genuinely help this question. If yes, include it in the "diagram" JSON field (SVG for math/physics/geometry, wikimedia for biology/anatomy). If not, omit the field entirely.`
   : `- Do NOT include any diagram. All information must be conveyed through text and math notation only.`
 }
 
@@ -557,15 +559,15 @@ Return ONLY this JSON structure (with no extra text):
   "correctIndices": [0${isMultipleCorrect ? ', 2' : ''}],` : ''}
   "estimatedSolveTimeSeconds": 240,
   "bloomsLevel": "Analyze",
-  "hiddenInsight": "<one sentence key insight>"${params.includeDiagrams ? `,
+  "hiddenInsight": "<one sentence key insight>"${params.includeDiagrams !== 'no' ? `,
   "diagram": {
     "required": true,
-    "type": "svg", 
+    "type": "svg",
     "content": "<raw svg code>",
     "search": "<wikimedia search term if type is wikimedia>"
   }` : ''}
 }
-${params.includeDiagrams ? '(Omit "diagram" field completely if no diagram is needed).' : ''}`;
+${params.includeDiagrams !== 'no' ? '(Omit "diagram" field completely if no diagram is needed).' : ''}`;
 
   const res = await callAIWithTokens(token, model, providerType, sysBase, promptAll, 0.8, 3000, true);
   const data = parseJSON<any>(res.content);
@@ -573,8 +575,8 @@ ${params.includeDiagrams ? '(Omit "diagram" field completely if no diagram is ne
   let stemText = data.stem || data.question || "";
   if (stemText.length < 60) throw new Error("Stem too short");
 
-  // Handle Diagram Injection — only when includeDiagrams is enabled
-  if (params.includeDiagrams !== false && data.diagram && data.diagram.required && data.diagram.type) {
+  // Handle Diagram Injection — skip only when explicitly disabled
+  if (params.includeDiagrams !== 'no' && data.diagram && data.diagram.required && data.diagram.type) {
     try {
       if (data.diagram.type === 'wikimedia' && data.diagram.search) {
             const url = `https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&pithumbsize=600&generator=search&gsrsearch=${encodeURIComponent(data.diagram.search)}&gsrlimit=1`;

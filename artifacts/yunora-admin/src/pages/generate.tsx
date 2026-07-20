@@ -42,7 +42,7 @@ const baseSchema = z.object({
   providerId: z.coerce.number().min(1, { message: "Required" }),
   model: z.string().min(1, { message: "Required" }),
   jeeAdvancedOnly: z.boolean().optional().default(false),
-  includeDiagrams: z.boolean().optional().default(false),
+  includeDiagrams: z.enum(['no', 'yes', 'ai']).default('no'),
 });
 
 type BaseFormValues = z.infer<typeof baseSchema>;
@@ -63,7 +63,7 @@ export default function GeneratePage() {
       providerId: undefined,
       model: '',
       jeeAdvancedOnly: false,
-      includeDiagrams: false,
+      includeDiagrams: 'no',
     },
   });
 
@@ -363,33 +363,28 @@ export default function GeneratePage() {
                     <div className="space-y-2">
                       <FormLabel className="text-sm font-medium">Diagram Mode</FormLabel>
                       <p className="text-xs text-muted-foreground">
-                        Tell the AI whether questions can include diagrams (SVG / images). The AI decides when a diagram genuinely helps.
+                        Control diagram usage. <strong>Without</strong> = never, <strong>With</strong> = always allowed, <strong>AI Decides</strong> = AI judges based on the question.
                       </p>
                       <div className="flex gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => field.onChange(false)}
-                          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
-                            !field.value
-                              ? 'border-primary bg-primary/5 text-primary'
-                              : 'border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/30'
-                          }`}
-                        >
-                          <ImageOff className="h-4 w-4" />
-                          Without Diagrams
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => field.onChange(true)}
-                          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
-                            field.value
-                              ? 'border-primary bg-primary/5 text-primary'
-                              : 'border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/30'
-                          }`}
-                        >
-                          <ImageIcon className="h-4 w-4" />
-                          With Diagrams
-                        </button>
+                        {([
+                          { value: 'no',  icon: <ImageOff className="h-4 w-4" />, label: 'Without Diagrams' },
+                          { value: 'yes', icon: <ImageIcon className="h-4 w-4" />, label: 'With Diagrams' },
+                          { value: 'ai',  icon: <Sparkles className="h-4 w-4" />,  label: 'AI Decides' },
+                        ] as const).map((opt) => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => field.onChange(opt.value)}
+                            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                              field.value === opt.value
+                                ? 'border-primary bg-primary/5 text-primary'
+                                : 'border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/30'
+                            }`}
+                          >
+                            {opt.icon}
+                            {opt.label}
+                          </button>
+                        ))}
                       </div>
                     </div>
                   </FormItem>
