@@ -1,7 +1,75 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { requireAuth } from "../lib/auth.js";
+import { requireAuth, simpleDecrypt } from "../lib/auth.js";
+import { firestore, snapshotToArr } from "@workspace/db";
+import { callAIWithTokens } from "../lib/pipeline.js";
 
 const router = Router();
+
+const LANG_NAMES: Record<string, string> = {
+  hi: "Hindi", gu: "Gujarati", mr: "Marathi", ta: "Tamil",
+  te: "Telugu", bn: "Bengali", fr: "French", de: "German",
+  es: "Spanish", ar: "Arabic", zh: "Chinese (Simplified)",
+  ja: "Japanese", ko: "Korean", ur: "Urdu", pa: "Punjabi",
+};
+
+// ── AI-powered translation (uses the stored AI provider, no external API key needed) ──
+router.post("/ai-translate", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { texts, targetLanguage } = req.body as { texts: string[]; targetLanguage: string };
+    if (!texts?.length || !targetLanguage) {
+      res.status(400).json({ error: "Missing 'texts' or 'targetLanguage'" });
+      return;
+    }
+
+    const langName = LANG_NAMES[targetLanguage] ?? targetLanguage;
+
+    // Pick first active AI provider
+    const snap = await firestore.collection("aiProviders").where("isActive", "==", true).limit(1).get();
+    if (snap.empty) {
+      res.status(500).json({ error: "No active AI provider configured" });
+      return;
+    }
+    const provider = snapshotToArr(snap)[0] as any;
+    const token = simpleDecrypt(provider.encryptedToken as string);
+    const model: string = provider.defaultModel ?? "gemini-2.0-flash";
+
+    const systemPrompt = `You are an expert educational content translator. Translate the given JSON array of strings to ${langName}.
+Rules:
+- Preserve ALL LaTeX math expressions exactly (anything inside $...$, $...$, \\(...\\), \\[...\\]) — do NOT translate or modify them.
+- Preserve newlines and formatting.
+- Translate only the natural-language text around the math.
+- Return a valid JSON array with the same number of elements as the input.
+- Return ONLY the JSON array, no explanation.`;
+
+    const userPrompt = JSON.stringify(texts);
+
+    const result = await callAIWithTokens(
+      token, model, provider.providerType,
+      systemPrompt, userPrompt,
+      0.2, 4096, false,
+    );
+
+    // Parse the returned JSON array
+    let translated: string[];
+    try {
+      const raw = result.content.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/,"");
+      translated = JSON.parse(raw);
+      if (!Array.isArray(translated) || translated.length !== texts.length) {
+        throw new Error("Unexpected shape");
+      }
+    } catch {
+      // Fallback: try to extract array from anywhere in the response
+      const match = result.content.match(/\[[\s\S]*\]/);
+      if (!match) throw new Error("AI did not return a valid JSON array");
+      translated = JSON.parse(match[0]);
+    }
+
+    res.json({ translations: translated });
+  } catch (error: any) {
+    req.log?.error({ err: error }, "AI translate error");
+    res.status(500).json({ error: "AI translation failed", details: error.message });
+  }
+});
 
 router.post("/translate", requireAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {

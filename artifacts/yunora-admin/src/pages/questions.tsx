@@ -684,27 +684,32 @@ function QuestionList({ questions, selectedIds, onToggleSelect, onDelete }: Ques
     try {
       const textsToTranslate = [
         q.question,
-        q.explanation || ''
+        q.explanation || '',
+        q.options || '',
+        q.correctAnswer || '',
       ];
-      const res = await fetch('/api/translate', {
+      const res = await fetch('/api/ai-translate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ text: textsToTranslate, targetLanguage: targetLang }),
+        body: JSON.stringify({ texts: textsToTranslate, targetLanguage: targetLang }),
       });
-      if (!res.ok) throw new Error('Translation failed');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).details || (err as any).error || 'Translation failed');
+      }
       const data = await res.json();
       setTranslations(prev => ({
         ...prev,
         [q.id]: {
-          question: data.translations[0],
-          options: q.options || '',
-          correctAnswer: q.correctAnswer || '',
-          explanation: data.translations[1],
+          question: data.translations[0] || q.question,
+          explanation: data.translations[1] || q.explanation || '',
+          options: data.translations[2] || q.options || '',
+          correctAnswer: data.translations[3] || q.correctAnswer || '',
         }
       }));
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Translation failed. Please ensure the API key is set in the backend.');
+      alert(`Translation failed: ${err.message}`);
     } finally {
       setTranslatingId(null);
     }
@@ -760,7 +765,7 @@ function QuestionList({ questions, selectedIds, onToggleSelect, onDelete }: Ques
                     <div>
                       <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Options</h4>
                       <div className="bg-muted/50 rounded-md divide-y divide-border overflow-hidden">
-                        {q.options.split('\n').filter(Boolean).map((opt, idx) => (
+                        {(translations[q.id]?.options || q.options).split('\n').filter(Boolean).map((opt, idx) => (
                           <div key={idx} className="px-3 py-2 text-sm"><MathText>{opt}</MathText></div>
                         ))}
                       </div>
@@ -769,7 +774,7 @@ function QuestionList({ questions, selectedIds, onToggleSelect, onDelete }: Ques
                   <div>
                     <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Correct Answer</h4>
                     <div className="bg-primary/5 text-primary border border-primary/10 p-3 rounded-md text-sm font-medium">
-                      <MathText>{q.correctAnswer ?? ''}</MathText>
+                      <MathText>{translations[q.id]?.correctAnswer || q.correctAnswer || ''}</MathText>
                     </div>
                   </div>
                   {q.explanation && (

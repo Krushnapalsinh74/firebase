@@ -21,7 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, ImageIcon, ImageOff } from 'lucide-react';
 
 const DIFFICULTY_LEVELS = [
   { value: 'easy',     label: 'Easy',     description: 'Basic recall & understanding',         color: 'bg-green-100 text-green-800 border-green-200' },
@@ -42,6 +42,7 @@ const baseSchema = z.object({
   providerId: z.coerce.number().min(1, { message: "Required" }),
   model: z.string().min(1, { message: "Required" }),
   jeeAdvancedOnly: z.boolean().optional().default(false),
+  includeDiagrams: z.boolean().optional().default(false),
 });
 
 type BaseFormValues = z.infer<typeof baseSchema>;
@@ -62,6 +63,7 @@ export default function GeneratePage() {
       providerId: undefined,
       model: '',
       jeeAdvancedOnly: false,
+      includeDiagrams: false,
     },
   });
 
@@ -71,6 +73,7 @@ export default function GeneratePage() {
   const chapterId = useWatch({ control: form.control, name: 'chapterId' });
   const topicId = useWatch({ control: form.control, name: 'topicId' });
   const jeeAdvancedOnly = useWatch({ control: form.control, name: 'jeeAdvancedOnly' });
+  const includeDiagrams = useWatch({ control: form.control, name: 'includeDiagrams' });
   const providerId = useWatch({ control: form.control, name: 'providerId' });
 
   const { data: boards } = useListBoards();
@@ -351,7 +354,51 @@ export default function GeneratePage() {
                 />
               </div>
 
-                {/* Multi-difficulty selection */}
+                {/* Diagram toggle */}
+              <FormField
+                control={form.control}
+                name="includeDiagrams"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="space-y-2">
+                      <FormLabel className="text-sm font-medium">Diagram Mode</FormLabel>
+                      <p className="text-xs text-muted-foreground">
+                        Tell the AI whether questions can include diagrams (SVG / images). The AI decides when a diagram genuinely helps.
+                      </p>
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => field.onChange(false)}
+                          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                            !field.value
+                              ? 'border-primary bg-primary/5 text-primary'
+                              : 'border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/30'
+                          }`}
+                        >
+                          <ImageOff className="h-4 w-4" />
+                          Without Diagrams
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => field.onChange(true)}
+                          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                            field.value
+                              ? 'border-primary bg-primary/5 text-primary'
+                              : 'border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/30'
+                          }`}
+                        >
+                          <ImageIcon className="h-4 w-4" />
+                          With Diagrams
+                        </button>
+                      </div>
+                    </div>
+                  </FormItem>
+                )}
+              />
+
+              <div className="h-px w-full bg-border" />
+
+              {/* Multi-difficulty selection */}
               <div className="space-y-3">
                 <div>
                   <p className="text-sm font-medium leading-none">Difficulty Levels</p>
