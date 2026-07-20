@@ -377,12 +377,21 @@ export default function GeneratePage() {
                         }`}
                       >
                         <div className="flex items-start gap-3">
-                          <Checkbox
-                            checked={isLockedOut ? false : isSelected}
-                            disabled={isLockedOut}
-                            tabIndex={-1}
-                            className="mt-0.5 pointer-events-none"
-                          />
+                          <div
+                            className={`mt-0.5 h-4 w-4 shrink-0 rounded-sm border flex items-center justify-center pointer-events-none ${
+                              isLockedOut
+                                ? 'border-muted-foreground/30 bg-muted/30'
+                                : isSelected
+                                ? 'border-primary bg-primary'
+                                : 'border-primary/60 bg-background'
+                            }`}
+                          >
+                            {isSelected && !isLockedOut && (
+                              <svg className="h-3 w-3 text-primary-foreground" fill="none" viewBox="0 0 12 12">
+                                <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            )}
+                          </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-medium text-sm">{lvl.label}</span>
