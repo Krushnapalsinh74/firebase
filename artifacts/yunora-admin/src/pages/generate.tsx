@@ -380,9 +380,8 @@ export default function GeneratePage() {
                           <Checkbox
                             checked={isLockedOut ? false : isSelected}
                             disabled={isLockedOut}
-                            onCheckedChange={() => !isLockedOut && toggleDifficulty(lvl.value)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="mt-0.5"
+                            tabIndex={-1}
+                            className="mt-0.5 pointer-events-none"
                           />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
