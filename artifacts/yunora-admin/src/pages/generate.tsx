@@ -52,6 +52,17 @@ export default function GeneratePage() {
 
   const form = useForm<BaseFormValues>({
     resolver: zodResolver(baseSchema),
+    defaultValues: {
+      boardId: '',
+      standardId: '',
+      subjectId: '',
+      chapterId: '',
+      topicId: '',
+      questionType: '',
+      providerId: undefined,
+      model: '',
+      jeeAdvancedOnly: false,
+    },
   });
 
   const boardId = useWatch({ control: form.control, name: 'boardId' });
@@ -176,7 +187,7 @@ export default function GeneratePage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Board</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value?.toString()}>
+                      <Select onValueChange={field.onChange} value={field.value?.toString() ?? ""}>
                         <FormControl>
                           <SelectTrigger><SelectValue placeholder="Select board" /></SelectTrigger>
                         </FormControl>
@@ -197,7 +208,7 @@ export default function GeneratePage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Standard</FormLabel>
-                      <Select disabled={!boardId} onValueChange={field.onChange} value={field.value?.toString()}>
+                      <Select disabled={!boardId} onValueChange={field.onChange} value={field.value?.toString() ?? ""}>
                         <FormControl>
                           <SelectTrigger><SelectValue placeholder="Select standard" /></SelectTrigger>
                         </FormControl>
@@ -218,7 +229,7 @@ export default function GeneratePage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Subject</FormLabel>
-                      <Select disabled={!standardId} onValueChange={field.onChange} value={field.value?.toString()}>
+                      <Select disabled={!standardId} onValueChange={field.onChange} value={field.value?.toString() ?? ""}>
                         <FormControl>
                           <SelectTrigger><SelectValue placeholder="Select subject" /></SelectTrigger>
                         </FormControl>
@@ -246,7 +257,7 @@ export default function GeneratePage() {
                           </Badge>
                         )}
                       </div>
-                      <Select disabled={!subjectId} onValueChange={field.onChange} value={field.value?.toString()}>
+                      <Select disabled={!subjectId} onValueChange={field.onChange} value={field.value?.toString() ?? ""}>
                         <FormControl>
                           <SelectTrigger><SelectValue placeholder="Select chapter" /></SelectTrigger>
                         </FormControl>
@@ -269,7 +280,7 @@ export default function GeneratePage() {
                   render={({ field }) => (
                     <FormItem className="md:col-span-2">
                       <FormLabel>Topic</FormLabel>
-                      <Select disabled={!chapterId} onValueChange={field.onChange} value={field.value?.toString()}>
+                      <Select disabled={!chapterId} onValueChange={field.onChange} value={field.value?.toString() ?? ""}>
                         <FormControl>
                           <SelectTrigger><SelectValue placeholder="Select topic" /></SelectTrigger>
                         </FormControl>
@@ -295,7 +306,7 @@ export default function GeneratePage() {
                   render={({ field }) => (
                     <FormItem className="md:col-span-2">
                       <FormLabel>Question Type</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value ?? ""}>
                         <FormControl>
                           <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                         </FormControl>
@@ -322,7 +333,7 @@ export default function GeneratePage() {
                       <div className="flex items-start gap-3">
                         <FormControl>
                           <Checkbox
-                            checked={field.value}
+                            checked={field.value ?? false}
                             onCheckedChange={(checked) => field.onChange(Boolean(checked))}
                           />
                         </FormControl>
@@ -428,7 +439,7 @@ export default function GeneratePage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>AI Provider</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value?.toString()}>
+                      <Select onValueChange={field.onChange} value={field.value?.toString() ?? ""}>
                         <FormControl>
                           <SelectTrigger><SelectValue placeholder="Select provider" /></SelectTrigger>
                         </FormControl>
@@ -449,7 +460,7 @@ export default function GeneratePage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Model</FormLabel>
-                      <Select disabled={!providerId} onValueChange={field.onChange} value={field.value}>
+                      <Select disabled={!providerId} onValueChange={field.onChange} value={field.value ?? ""}>
                         <FormControl>
                           <SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger>
                         </FormControl>
