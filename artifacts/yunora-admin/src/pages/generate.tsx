@@ -33,11 +33,11 @@ const DIFFICULTY_LEVELS = [
 type DifficultyValue = typeof DIFFICULTY_LEVELS[number]['value'];
 
 const baseSchema = z.object({
-  boardId: z.coerce.number().min(1, { message: "Required" }),
-  standardId: z.coerce.number().min(1, { message: "Required" }),
-  subjectId: z.coerce.number().min(1, { message: "Required" }),
-  chapterId: z.coerce.number().min(1, { message: "Required" }),
-  topicId: z.coerce.number().min(1, { message: "Required" }),
+  boardId: z.string().min(1, { message: "Required" }),
+  standardId: z.string().min(1, { message: "Required" }),
+  subjectId: z.string().min(1, { message: "Required" }),
+  chapterId: z.string().min(1, { message: "Required" }),
+  topicId: z.string().min(1, { message: "Required" }),
   questionType: z.string().min(1, { message: "Required" }),
   providerId: z.coerce.number().min(1, { message: "Required" }),
   model: z.string().min(1, { message: "Required" }),
@@ -70,9 +70,9 @@ export default function GeneratePage() {
   const { data: providers } = useListAiProviders();
   const { data: questionTypes } = useListQuestionTypes();
 
-  const selectedSubject = subjects?.data.find((s) => s.id === Number(subjectId));
-  const selectedChapter = chapters?.data.find((c) => c.id === Number(chapterId));
-  const selectedTopic = topics?.data.find((t) => t.id === Number(topicId));
+  const selectedSubject = subjects?.data.find((s) => String(s.id) === String(subjectId));
+  const selectedChapter = chapters?.data.find((c) => String(c.id) === String(chapterId));
+  const selectedTopic = topics?.data.find((t) => String(t.id) === String(topicId));
   
   const syllabusCategory = selectedChapter?.syllabus;
   const jeeTrackDetected = syllabusCategory 
