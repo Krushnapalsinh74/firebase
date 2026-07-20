@@ -11,7 +11,7 @@ router.get("/chapters", requireAuth, async (req, res) => {
     const limitNum = Math.min(100, parseInt(limit));
 
     let query: FirebaseFirestore.Query = firestore.collection("chapters");
-    if (subjectId) query = query.where("subjectId", "==", parseInt(subjectId));
+    if (subjectId) { const n = parseInt(subjectId); query = query.where("subjectId", "==", isNaN(n) ? subjectId : n); }
     if (syllabus && syllabus !== "__none__") query = query.where("syllabus", "==", syllabus);
     let chapters = snapshotToArr(await query.get()) as any[];
     chapters.sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));

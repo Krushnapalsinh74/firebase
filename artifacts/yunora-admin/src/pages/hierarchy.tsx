@@ -404,7 +404,7 @@ function StandardsTab({ boardId, onSelectStandard }: { boardId?: string | number
   );
 }
 
-function SubjectsTab({ standardId, onSelectSubject }: { standardId?: number, onSelectSubject: (id: number) => void }) {
+function SubjectsTab({ standardId, onSelectSubject }: { standardId?: string | number, onSelectSubject: (id: string | number) => void }) {
   const { data, isLoading } = useListSubjects({ standardId });
   const { data: standardsData } = useListStandards({});
   const createSubject = useCreateSubject();
@@ -435,7 +435,7 @@ function SubjectsTab({ standardId, onSelectSubject }: { standardId?: number, onS
       return;
     }
     createSubject.mutate(
-      { data: { name: name.trim(), code: code.trim().toUpperCase(), standardId: parseInt(selectedStandard) } },
+      { data: { name: name.trim(), code: code.trim().toUpperCase(), standardId: /^\d+$/.test(selectedStandard) ? parseInt(selectedStandard) : selectedStandard as any } },
       {
         onSuccess: () => {
           toast({ title: 'Subject created!' });
@@ -556,7 +556,7 @@ function SubjectsTab({ standardId, onSelectSubject }: { standardId?: number, onS
   );
 }
 
-function ChaptersTab({ subjectId, onSelectChapter }: { subjectId?: number, onSelectChapter: (id: number) => void }) {
+function ChaptersTab({ subjectId, onSelectChapter }: { subjectId?: string | number, onSelectChapter: (id: string | number) => void }) {
   const { data, isLoading } = useListChapters({ subjectId });
   const { data: subjectsData } = useListSubjects({});
   const { data: syllabusCategories } = useListChapterSyllabusCategories();
@@ -598,7 +598,7 @@ function ChaptersTab({ subjectId, onSelectChapter }: { subjectId?: number, onSel
     }
 
     createChapter.mutate(
-      { data: { name: name.trim(), orderIndex: parseInt(orderIndex) || 1, subjectId: parseInt(selectedSubject), syllabus: finalSyllabus } },
+      { data: { name: name.trim(), orderIndex: parseInt(orderIndex) || 1, subjectId: /^\d+$/.test(selectedSubject) ? parseInt(selectedSubject) : selectedSubject as any, syllabus: finalSyllabus } },
       {
         onSuccess: () => {
           toast({ title: 'Chapter created!' });
@@ -756,7 +756,7 @@ function ChaptersTab({ subjectId, onSelectChapter }: { subjectId?: number, onSel
   );
 }
 
-function TopicsTab({ chapterId }: { chapterId?: number }) {
+function TopicsTab({ chapterId }: { chapterId?: string | number }) {
   const { data, isLoading } = useListTopics({ chapterId });
   const { data: chaptersData } = useListChapters({});
   const deleteTopic = useDeleteTopic();
@@ -788,7 +788,7 @@ function TopicsTab({ chapterId }: { chapterId?: number }) {
       return;
     }
     createTopic.mutate(
-      { data: { name: name.trim(), description: description.trim() || undefined, chapterId: parseInt(selectedChapter) } },
+      { data: { name: name.trim(), description: description.trim() || undefined, chapterId: /^\d+$/.test(selectedChapter) ? parseInt(selectedChapter) : selectedChapter as any } },
       {
         onSuccess: () => {
           toast({ title: 'Topic created!' });

@@ -11,7 +11,7 @@ router.get("/subjects", requireAuth, async (req, res) => {
     const limitNum = Math.min(100, parseInt(limit));
 
     let query: FirebaseFirestore.Query = firestore.collection("subjects");
-    if (standardId) query = query.where("standardId", "==", parseInt(standardId));
+    if (standardId) { const n = parseInt(standardId); query = query.where("standardId", "==", isNaN(n) ? standardId : n); }
     let subjects = snapshotToArr(await query.get()) as any[];
     subjects.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
     if (search) {
