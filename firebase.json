@@ -6,6 +6,9 @@
       "**/.*",
       "**/node_modules/**"
     ],
+    "predeploy": [
+      "pnpm --filter @workspace/yunora-admin run build"
+    ],
     "rewrites": [
       {
         "source": "/api/**",
