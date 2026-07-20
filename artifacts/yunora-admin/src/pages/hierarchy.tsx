@@ -264,7 +264,7 @@ function StandardsTab({ boardId, onSelectStandard }: { boardId?: number, onSelec
     deleteStandard.mutate({ id }, {
       onSuccess: () => {
         toast({ title: 'Standard deleted' });
-        queryClient.invalidateQueries({ queryKey: getListStandardsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListStandardsQueryKey(), exact: false });
       },
       onError: (err) => {
         toast({ variant: 'destructive', title: 'Failed to delete standard', description: err.message });
@@ -287,7 +287,7 @@ function StandardsTab({ boardId, onSelectStandard }: { boardId?: number, onSelec
       {
         onSuccess: () => {
           toast({ title: 'Standard created!' });
-          queryClient.invalidateQueries({ queryKey: getListStandardsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListStandardsQueryKey(), exact: false });
           setDialogOpen(false);
           setName(''); setLevel('');
         },

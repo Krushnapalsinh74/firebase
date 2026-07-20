@@ -2,6 +2,17 @@ import { Router } from "express";
 import { firestore, nextId, docToObj, snapshotToArr, nowTs } from "@workspace/db";
 import { requireAuth } from "../lib/auth.js";
 
+async function logActivity(action: string, description: string) {
+  try {
+    const logId = await nextId("activityLogs");
+    await firestore.collection("activityLogs").doc(String(logId)).set({
+      id: logId, action, description,
+      questionsGenerated: 0, model: null, userId: null, jobId: null,
+      createdAt: nowTs(),
+    });
+  } catch { /* non-fatal */ }
+}
+
 const router = Router();
 
 router.get("/standards", requireAuth, async (req, res) => {
@@ -52,6 +63,7 @@ router.post("/standards", requireAuth, async (req, res) => {
     const now = nowTs();
     const data = { id, name, level, boardId, isActive, createdAt: now, updatedAt: now };
     await firestore.collection("standards").doc(String(id)).set(data);
+    await logActivity("standard_created", `Standard created: "${name}" (Level ${level})`);
     res.status(201).json({ ...data, createdAt: now.toDate().toISOString(), updatedAt: now.toDate().toISOString(), boardName: null, subjectsCount: 0 });
   } catch (err) {
     req.log.error({ err }, "Create standard error");
@@ -71,6 +83,7 @@ router.patch("/standards/:id", requireAuth, async (req, res) => {
     if (isActive !== undefined) updates["isActive"] = isActive;
     await ref.update(updates);
     const s = docToObj(await ref.get())!;
+    await logActivity("standard_updated", `Standard updated: ID ${id}`);
     res.json({ ...s, boardName: null, subjectsCount: 0 });
   } catch (err) {
     req.log.error({ err }, "Update standard error");
@@ -82,6 +95,7 @@ router.delete("/standards/:id", requireAuth, async (req, res) => {
   try {
     const id = parseInt(req.params["id"] as string);
     await firestore.collection("standards").doc(String(id)).delete();
+    await logActivity("standard_deleted", `Standard deleted: ID ${id}`);
     res.status(204).send();
   } catch (err) {
     req.log.error({ err }, "Delete standard error");
