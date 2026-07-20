@@ -28,12 +28,14 @@
       "**/.*",
       "**/*.map"
     ],
-    "environmentVariables": {},
+    "environmentVariables": {
+      "FIRESTORE_DATABASE_ID": "kp73"
+    },
     "predeploy": [
       "pnpm --filter @workspace/api-server run build",
       "npm install --prefix artifacts/api-server/dist firebase-admin",
       "rm -f artifacts/api-server/dist/package-lock.json",
-      "echo '' > artifacts/api-server/dist/.env"
+      "echo 'FIRESTORE_DATABASE_ID=kp73' > artifacts/api-server/dist/.env"
     ]
   }
 }
