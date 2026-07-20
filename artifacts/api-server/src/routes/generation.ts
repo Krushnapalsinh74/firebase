@@ -20,20 +20,30 @@ router.post("/generation/start", requireAuth, async (req, res) => {
     const params = req.body as GenerationRequest;
     const jobId = randomUUID();
 
-    const boardIdNum    = typeof params.boardId    === "number" ? params.boardId    : parseInt(params.boardId as any);
-    const standardIdNum = typeof params.standardId === "number" ? params.standardId : parseInt(params.standardId as any);
-    const subjectIdNum  = typeof params.subjectId  === "number" ? params.subjectId  : parseInt(params.subjectId as any);
-    const chapterIdNum  = typeof params.chapterId  === "number" ? params.chapterId  : parseInt(params.chapterId as any);
-    const topicIdNum    = typeof params.topicId    === "number" ? params.topicId    : parseInt(params.topicId as any);
-    const providerIdNum = typeof params.providerId === "number" ? params.providerId : parseInt(params.providerId as any);
+    // Use IDs as-is (string or number) for Firestore lookups so that both
+    // numeric sequential IDs and Firestore auto-generated IDs work correctly.
+    const boardId    = String(params.boardId);
+    const standardId = String(params.standardId);
+    const subjectId  = String(params.subjectId);
+    const chapterId  = String(params.chapterId);
+    const topicId    = String(params.topicId);
+    const providerId = String(params.providerId);
+
+    // Keep numeric copies for storing on the job document (backward compat).
+    const boardIdNum    = isNaN(Number(boardId))    ? boardId    : Number(boardId);
+    const standardIdNum = isNaN(Number(standardId)) ? standardId : Number(standardId);
+    const subjectIdNum  = isNaN(Number(subjectId))  ? subjectId  : Number(subjectId);
+    const chapterIdNum  = isNaN(Number(chapterId))  ? chapterId  : Number(chapterId);
+    const topicIdNum    = isNaN(Number(topicId))    ? topicId    : Number(topicId);
+    const providerIdNum = isNaN(Number(providerId)) ? providerId : Number(providerId);
 
     const [topicDoc, chapterDoc, subjectDoc, boardDoc, standardDoc, providerDoc] = await Promise.all([
-      firestore.collection("topics").doc(String(topicIdNum)).get(),
-      firestore.collection("chapters").doc(String(chapterIdNum)).get(),
-      firestore.collection("subjects").doc(String(subjectIdNum)).get(),
-      firestore.collection("boards").doc(String(boardIdNum)).get(),
-      firestore.collection("standards").doc(String(standardIdNum)).get(),
-      firestore.collection("aiProviders").doc(String(providerIdNum)).get(),
+      firestore.collection("topics").doc(topicId).get(),
+      firestore.collection("chapters").doc(chapterId).get(),
+      firestore.collection("subjects").doc(subjectId).get(),
+      firestore.collection("boards").doc(boardId).get(),
+      firestore.collection("standards").doc(standardId).get(),
+      firestore.collection("aiProviders").doc(providerId).get(),
     ]);
 
     const topic    = topicDoc.exists    ? topicDoc.data()    as any : null;
