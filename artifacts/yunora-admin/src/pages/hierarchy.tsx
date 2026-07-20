@@ -68,10 +68,10 @@ interface AiTopic {
 
 export default function HierarchyPage() {
   const [activeTab, setActiveTab] = useState('boards');
-  const [selectedBoardId, setSelectedBoardId] = useState<number | undefined>();
-  const [selectedStandardId, setSelectedStandardId] = useState<number | undefined>();
-  const [selectedSubjectId, setSelectedSubjectId] = useState<number | undefined>();
-  const [selectedChapterId, setSelectedChapterId] = useState<number | undefined>();
+  const [selectedBoardId, setSelectedBoardId] = useState<string | number | undefined>();
+  const [selectedStandardId, setSelectedStandardId] = useState<string | number | undefined>();
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string | number | undefined>();
+  const [selectedChapterId, setSelectedChapterId] = useState<string | number | undefined>();
 
   return (
     <div className="space-y-6 pb-10">
@@ -252,7 +252,7 @@ function BoardsTab({ onSelectBoard }: { onSelectBoard: (id: number) => void }) {
   );
 }
 
-function StandardsTab({ boardId, onSelectStandard }: { boardId?: number, onSelectStandard: (id: number) => void }) {
+function StandardsTab({ boardId, onSelectStandard }: { boardId?: string | number, onSelectStandard: (id: string | number) => void }) {
   const { data, isLoading } = useListStandards({ boardId });
   const { data: boardsData } = useListBoards();
   const createStandard = useCreateStandard();
@@ -283,7 +283,7 @@ function StandardsTab({ boardId, onSelectStandard }: { boardId?: number, onSelec
       return;
     }
     createStandard.mutate(
-      { data: { name: name.trim(), level: parseInt(level), boardId: parseInt(selectedBoard) } },
+      { data: { name: name.trim(), level: parseInt(level), boardId: /^\d+$/.test(selectedBoard) ? parseInt(selectedBoard) : selectedBoard as any } },
       {
         onSuccess: () => {
           toast({ title: 'Standard created!' });
