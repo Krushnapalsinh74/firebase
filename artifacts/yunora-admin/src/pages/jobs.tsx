@@ -92,7 +92,7 @@ function JobRow({ job, badge }: { job: any, badge: React.ReactNode }) {
           <TableCell>
             <div className="flex flex-col">
               <span className="font-medium truncate max-w-[200px]">{job.topicName || 'Unknown Topic'}</span>
-              <span className="text-xs text-muted-foreground">{job.subjectName}</span>
+              <span className="text-xs text-muted-foreground">{[job.chapterName, job.subjectName].filter(Boolean).join(' · ')}</span>
             </div>
           </TableCell>
           <TableCell>

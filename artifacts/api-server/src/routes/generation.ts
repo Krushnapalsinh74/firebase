@@ -205,7 +205,7 @@ router.get("/generation/jobs", requireAuth, async (req, res) => {
       data: page_jobs.map((j: any) => ({
         jobId: j.jobId, status: j.status,
         totalRequested: j.totalRequested, totalGenerated: j.totalGenerated,
-        topicName: j.topicName, subjectName: j.subjectName,
+        topicName: j.topicName, chapterName: j.chapterName, subjectName: j.subjectName,
         difficulty: j.difficulty, questionType: j.questionType,
         model: j.model, createdAt: j.createdAt, completedAt: j.completedAt,
       })),
