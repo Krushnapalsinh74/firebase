@@ -253,7 +253,7 @@ function BoardsTab({ onSelectBoard }: { onSelectBoard: (id: number) => void }) {
 }
 
 function StandardsTab({ boardId, onSelectStandard }: { boardId?: string | number, onSelectStandard: (id: string | number) => void }) {
-  const { data, isLoading } = useListStandards({ boardId });
+  const { data, isLoading } = useListStandards({ boardId: boardId ? Number(boardId) : undefined });
   const { data: boardsData } = useListBoards();
   const createStandard = useCreateStandard();
   const deleteStandard = useDeleteStandard();
@@ -264,7 +264,7 @@ function StandardsTab({ boardId, onSelectStandard }: { boardId?: string | number
     deleteStandard.mutate({ id }, {
       onSuccess: () => {
         toast({ title: 'Standard deleted' });
-        queryClient.invalidateQueries({ queryKey: getListStandardsQueryKey({ boardId }) });
+        queryClient.invalidateQueries({ queryKey: getListStandardsQueryKey({ boardId: boardId ? Number(boardId) : undefined }) });
       },
       onError: (err) => {
         toast({ variant: 'destructive', title: 'Failed to delete standard', description: err.message });
@@ -405,7 +405,7 @@ function StandardsTab({ boardId, onSelectStandard }: { boardId?: string | number
 }
 
 function SubjectsTab({ standardId, onSelectSubject }: { standardId?: string | number, onSelectSubject: (id: string | number) => void }) {
-  const { data, isLoading } = useListSubjects({ standardId });
+  const { data, isLoading } = useListSubjects({ standardId: standardId ? Number(standardId) : undefined });
   const { data: standardsData } = useListStandards({});
   const createSubject = useCreateSubject();
   const deleteSubject = useDeleteSubject();
@@ -557,7 +557,7 @@ function SubjectsTab({ standardId, onSelectSubject }: { standardId?: string | nu
 }
 
 function ChaptersTab({ subjectId, onSelectChapter }: { subjectId?: string | number, onSelectChapter: (id: string | number) => void }) {
-  const { data, isLoading } = useListChapters({ subjectId });
+  const { data, isLoading } = useListChapters({ subjectId: subjectId ? Number(subjectId) : undefined });
   const { data: subjectsData } = useListSubjects({});
   const { data: syllabusCategories } = useListChapterSyllabusCategories();
   const createChapter = useCreateChapter();
@@ -757,7 +757,7 @@ function ChaptersTab({ subjectId, onSelectChapter }: { subjectId?: string | numb
 }
 
 function TopicsTab({ chapterId }: { chapterId?: string | number }) {
-  const { data, isLoading } = useListTopics({ chapterId });
+  const { data, isLoading } = useListTopics({ chapterId: chapterId ? Number(chapterId) : undefined });
   const { data: chaptersData } = useListChapters({});
   const deleteTopic = useDeleteTopic();
   const createTopic = useCreateTopic();
@@ -933,7 +933,7 @@ function TopicsTab({ chapterId }: { chapterId?: string | number }) {
         <AiGenerateTopicsDialog
           open={aiDialogOpen}
           onClose={() => setAiDialogOpen(false)}
-          chapterId={chapterId}
+          chapterId={Number(chapterId)}
           onSaved={() => {
             queryClient.invalidateQueries({ queryKey: getListTopicsQueryKey() });
           }}

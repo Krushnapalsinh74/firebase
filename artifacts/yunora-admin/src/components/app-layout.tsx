@@ -12,7 +12,8 @@ import {
   LogOut,
   Menu,
   Sun,
-  Moon
+  Moon,
+  Globe
 } from 'lucide-react';
 import { useAuthStore } from '@/hooks/use-auth';
 import { useThemeStore } from '@/hooks/use-theme';
@@ -29,6 +30,7 @@ const navItems = [
   { href: '/providers', label: 'Providers', icon: Cpu },
   { href: '/papers', label: 'Papers', icon: FileText },
   { href: '/analytics', label: 'Analytics', icon: BarChart3 },
+  { href: '/translate', label: 'Translate', icon: Globe },
 ];
 
 function NavLinks() {

@@ -77,10 +77,10 @@ export default function GeneratePage() {
   const providerId = useWatch({ control: form.control, name: 'providerId' });
 
   const { data: boards } = useListBoards();
-  const { data: standards } = useListStandards({ boardId });
-  const { data: subjects } = useListSubjects({ standardId });
-  const { data: chapters } = useListChapters({ subjectId });
-  const { data: topics } = useListTopics({ chapterId });
+  const { data: standards } = useListStandards({ boardId: boardId ? Number(boardId) : undefined });
+  const { data: subjects } = useListSubjects({ standardId: standardId ? Number(standardId) : undefined });
+  const { data: chapters } = useListChapters({ subjectId: subjectId ? Number(subjectId) : undefined });
+  const { data: topics } = useListTopics({ chapterId: chapterId ? Number(chapterId) : undefined });
   const { data: providers } = useListAiProviders();
   const { data: questionTypes } = useListQuestionTypes();
 
@@ -139,7 +139,17 @@ export default function GeneratePage() {
     for (const difficulty of runDifficulties) {
       const count = diffCounts[difficulty] ?? 5;
       try {
-        const res = await generateMutation.mutateAsync({ data: { ...data, difficulty, count } });
+        const payload = {
+          ...data,
+          boardId: data.boardId ? Number(data.boardId) : undefined,
+          standardId: data.standardId ? Number(data.standardId) : undefined,
+          subjectId: data.subjectId ? Number(data.subjectId) : undefined,
+          chapterId: data.chapterId ? Number(data.chapterId) : undefined,
+          topicId: data.topicId ? Number(data.topicId) : undefined,
+          difficulty,
+          count
+        };
+        const res = await generateMutation.mutateAsync({ data: payload as any });
         jobIds.push(res.jobId);
       } catch (err) {
         errors.push(`${difficulty}: ${(err as Error).message}`);

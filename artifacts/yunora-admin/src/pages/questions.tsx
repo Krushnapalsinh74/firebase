@@ -525,8 +525,8 @@ export default function QuestionsPage() {
               key={opt.value}
               onClick={() => { setDifficulty(d => d === opt.value ? '' : opt.value); setPage(1); clearSelection(); }}
               className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-all ${difficulty === opt.value
-                  ? opt.cls + ' ring-2 ring-offset-1 ring-current'
-                  : 'border-border text-muted-foreground hover:border-current ' + opt.cls
+                ? opt.cls + ' ring-2 ring-offset-1 ring-current'
+                : 'border-border text-muted-foreground hover:border-current ' + opt.cls
                 }`}
             >
               {opt.label}
@@ -644,6 +644,7 @@ interface Question {
   generatedAt?: string | null;
   subjectName?: string | null;
   chapterName?: string | null;
+  translations?: Record<string, { question: string, options: string, correctAnswer: string, explanation: string }>;
 }
 
 interface QuestionListProps {
@@ -668,7 +669,9 @@ function QuestionList({ questions, selectedIds, onToggleSelect, onDelete }: Ques
   const [translatingId, setTranslatingId] = useState<number | null>(null);
   const [translations, setTranslations] = useState<Record<number, { question: string, options: string, correctAnswer: string, explanation: string }>>({});
   const [targetLang, setTargetLang] = useState<string>('hi');
+  const [deletingTranslationId, setDeletingTranslationId] = useState<number | null>(null);
   const token = useAuthStore((s) => s.token);
+  const queryClient = useQueryClient();
 
   const handleTranslate = async (q: Question) => {
     if (targetLang === 'en') {
@@ -682,36 +685,63 @@ function QuestionList({ questions, selectedIds, onToggleSelect, onDelete }: Ques
 
     setTranslatingId(q.id);
     try {
-      const textsToTranslate = [
-        q.question,
-        q.explanation || '',
-        q.options || '',
-        q.correctAnswer || '',
-      ];
-      const res = await fetch('/api/ai-translate', {
+      const res = await fetch('/api/translate-question', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ texts: textsToTranslate, targetLanguage: targetLang }),
+        body: JSON.stringify({ questionId: q.id, targetLanguage: targetLang }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error((err as any).details || (err as any).error || 'Translation failed');
       }
+      
+      // Invalidate queries so the question is re-fetched with the new q.translations
+      queryClient.invalidateQueries({ queryKey: getListQuestionsQueryKey() });
+      
+      // Also update local state for instant feedback
       const data = await res.json();
       setTranslations(prev => ({
         ...prev,
-        [q.id]: {
-          question: data.translations[0] || q.question,
-          explanation: data.translations[1] || q.explanation || '',
-          options: data.translations[2] || q.options || '',
-          correctAnswer: data.translations[3] || q.correctAnswer || '',
-        }
+        [q.id]: data.translations[targetLang]
       }));
     } catch (err: any) {
       console.error(err);
       alert(`Translation failed: ${err.message}`);
     } finally {
       setTranslatingId(null);
+    }
+  };
+
+  const getDisplayedText = (q: Question, field: 'question' | 'options' | 'correctAnswer' | 'explanation') => {
+    if (targetLang === 'en') return q[field] || '';
+    if (q.translations?.[targetLang]?.[field]) return q.translations[targetLang][field];
+    if (translations[q.id]?.[field]) return translations[q.id][field];
+    return q[field] || '';
+  };
+
+  const handleDeleteTranslation = async (q: Question) => {
+    if (!confirm(`Are you sure you want to delete the ${targetLang} translation?`)) return;
+    setDeletingTranslationId(q.id);
+    try {
+      const res = await fetch(`/api/questions/${q.id}/translations/${targetLang}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        throw new Error('Failed to delete translation');
+      }
+      queryClient.invalidateQueries({ queryKey: getListQuestionsQueryKey() });
+      setTranslations(prev => {
+        const next = { ...prev };
+        if (next[q.id]) {
+           delete next[q.id];
+        }
+        return next;
+      });
+    } catch (err: any) {
+      alert(`Delete failed: ${err.message}`);
+    } finally {
+      setDeletingTranslationId(null);
     }
   };
 
@@ -752,7 +782,7 @@ function QuestionList({ questions, selectedIds, onToggleSelect, onDelete }: Ques
                     </span>
                   </div>
                   <span className="font-medium text-base line-clamp-2 block">
-                    <MathText>{translations[q.id]?.question || q.question}</MathText>
+                    <MathText>{getDisplayedText(q, 'question')}</MathText>
                   </span>
                 </div>
                 <ChevronDown className={`h-4 w-4 mt-1 shrink-0 text-muted-foreground transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
@@ -763,25 +793,31 @@ function QuestionList({ questions, selectedIds, onToggleSelect, onDelete }: Ques
                 <div className="px-4 pb-4 pt-2 border-t space-y-4">
                   {q.options && (
                     <div>
-                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Options</h4>
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                        {targetLang === 'gu' ? 'વિકલ્પો' : 'Options'}
+                      </h4>
                       <div className="bg-muted/50 rounded-md divide-y divide-border overflow-hidden">
-                        {(translations[q.id]?.options || q.options).split('\n').filter(Boolean).map((opt, idx) => (
+                        {getDisplayedText(q, 'options').split('\n').filter(Boolean).map((opt, idx) => (
                           <div key={idx} className="px-3 py-2 text-sm"><MathText>{opt}</MathText></div>
                         ))}
                       </div>
                     </div>
                   )}
                   <div>
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Correct Answer</h4>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                      {targetLang === 'gu' ? 'સાચો જવાબ' : 'Correct Answer'}
+                    </h4>
                     <div className="bg-primary/5 text-primary border border-primary/10 p-3 rounded-md text-sm font-medium">
-                      <MathText>{translations[q.id]?.correctAnswer || q.correctAnswer || ''}</MathText>
+                      <MathText>{getDisplayedText(q, 'correctAnswer')}</MathText>
                     </div>
                   </div>
                   {q.explanation && (
                     <div>
-                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Explanation</h4>
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                        {targetLang === 'gu' ? 'સમજૂતી' : 'Explanation'}
+                      </h4>
                       <div className="text-sm text-muted-foreground leading-relaxed bg-muted/30 p-3 rounded-md">
-                        <MathText block>{translations[q.id]?.explanation || q.explanation}</MathText>
+                        <MathText block>{getDisplayedText(q, 'explanation')}</MathText>
                       </div>
                     </div>
                   )}
@@ -790,6 +826,11 @@ function QuestionList({ questions, selectedIds, onToggleSelect, onDelete }: Ques
                       <span>Score: {q.qualityScore ?? '—'}/10</span>
                       {q.modelUsed && <span>Model: {q.modelUsed}</span>}
                       {q.generatedAt && <span>{format(parseISO(q.generatedAt), 'MMM d, yyyy')}</span>}
+                      {q.translations && Object.keys(q.translations).length > 0 && (
+                        <span className="flex items-center gap-1 font-medium text-primary">
+                          <Globe className="h-3 w-3" /> {Object.keys(q.translations).length} Languages
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <Select value={targetLang} onValueChange={setTargetLang}>
@@ -816,6 +857,18 @@ function QuestionList({ questions, selectedIds, onToggleSelect, onDelete }: Ques
                         <Globe className="h-4 w-4 mr-2" />
                         {translatingId === q.id ? 'Translating...' : 'Translate'}
                       </Button>
+                      {targetLang !== 'en' && (q.translations?.[targetLang] || translations[q.id]) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-destructive hover:bg-destructive/10 hover:text-destructive ml-2"
+                          disabled={deletingTranslationId === q.id}
+                          onClick={() => handleDeleteTranslation(q)}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          {deletingTranslationId === q.id ? 'Deleting...' : 'Delete Translation'}
+                        </Button>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"

@@ -24,7 +24,7 @@ async function enrichQuestion(q: Record<string, any>) {
 
 router.get("/questions", requireAuth, async (req, res) => {
   try {
-    const { page = "1", limit = "50", search, boardId, standardId, subjectId, chapterId, topicId, difficulty, questionType, model, dateFrom, dateTo } = req.query as Record<string, string>;
+    const { page = "1", limit = "50", search, boardId, standardId, subjectId, chapterId, topicId, difficulty, questionType, model, dateFrom, dateTo, lang } = req.query as Record<string, string>;
     const pageNum = Math.max(1, parseInt(page));
     const limitNum = Math.min(200, parseInt(limit));
 
@@ -66,7 +66,23 @@ router.get("/questions", requireAuth, async (req, res) => {
     }
 
     const total = questions.length;
-    const page_questions = questions.slice((pageNum - 1) * limitNum, pageNum * limitNum);
+    let page_questions = questions.slice((pageNum - 1) * limitNum, pageNum * limitNum);
+
+    // Swap translations if requested
+    if (lang && lang !== "en") {
+      page_questions = page_questions.map(q => {
+        const translations = q.translations as Record<string, any> | undefined;
+        const translated = translations?.[lang];
+        if (translated) {
+          if (translated.question) q.question = translated.question;
+          if (translated.options) q.options = translated.options;
+          if (translated.correctAnswer) q.correctAnswer = translated.correctAnswer;
+          if (translated.explanation) q.explanation = translated.explanation;
+        }
+        return q;
+      });
+    }
+
     const enriched = await Promise.all(page_questions.map(enrichQuestion));
 
     res.json({ data: enriched, total, page: pageNum, limit: limitNum });
@@ -79,9 +95,23 @@ router.get("/questions", requireAuth, async (req, res) => {
 router.get("/questions/:id", requireAuth, async (req, res) => {
   try {
     const id = parseInt(req.params["id"] as string);
+    const lang = req.query.lang as string;
     const doc = await firestore.collection("questions").doc(String(id)).get();
     const q = docToObj(doc);
     if (!q) { res.status(404).json({ error: "Question not found" }); return; }
+
+    // Swap translations if requested
+    if (lang && lang !== "en") {
+      const translations = q.translations as Record<string, any> | undefined;
+      const translated = translations?.[lang];
+      if (translated) {
+        if (translated.question) q.question = translated.question;
+        if (translated.options) q.options = translated.options;
+        if (translated.correctAnswer) q.correctAnswer = translated.correctAnswer;
+        if (translated.explanation) q.explanation = translated.explanation;
+      }
+    }
+
     res.json(await enrichQuestion(q));
   } catch (err) {
     req.log.error({ err }, "Get question error");
@@ -136,6 +166,35 @@ router.delete("/questions/:id", requireAuth, async (req, res) => {
     res.status(204).send();
   } catch (err) {
     req.log.error({ err }, "Delete question error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+import { FieldValue } from "@google-cloud/firestore";
+
+router.delete("/questions/:id/translations/:lang", requireAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params["id"] as string);
+    const lang = req.params["lang"] as string;
+    
+    if (!id || !lang) {
+      res.status(400).json({ error: "Missing id or language" });
+      return;
+    }
+    
+    const ref = firestore.collection("questions").doc(String(id));
+    if (!(await ref.get()).exists) {
+      res.status(404).json({ error: "Question not found" });
+      return;
+    }
+    
+    await ref.update({
+      [`translations.${lang}`]: FieldValue.delete()
+    });
+    
+    res.status(204).send();
+  } catch (err) {
+    req.log.error({ err }, "Delete translation error");
     res.status(500).json({ error: "Internal server error" });
   }
 });

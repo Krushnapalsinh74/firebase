@@ -12,6 +12,83 @@ const LANG_NAMES: Record<string, string> = {
   ja: "Japanese", ko: "Korean", ur: "Urdu", pa: "Punjabi",
 };
 
+// ── Helper to process translations with math placeholders ──
+async function protectMathAndTranslate(
+  texts: string[],
+  langName: string,
+  token: string,
+  model: string,
+  providerType: string
+): Promise<string[]> {
+  const mathBlocks: string[] = [];
+  
+  const protectMath = (s: string) => {
+    if (!s) return s;
+    return s.replace(/\$\$(.*?)\$\$|\$(.*?)\$|\\\((.*?)\\\)|\\\[(.*?)\\\]/gs, (match) => {
+      mathBlocks.push(match);
+      return `{{EQ${mathBlocks.length - 1}}}`;
+    });
+  };
+
+  const protectedTexts = texts.map(protectMath);
+
+  let systemPrompt = `You are a specialized educational content translator for JEE/NEET physics and mathematics.
+Translate the given JSON array of strings from English to ${langName}.
+
+CRITICAL RULES:
+1. TRANSLATE ONLY THE NATURAL LANGUAGE PROSE.
+2. DO NOT modify, translate, or transliterate ANY mathematical symbols, variables (e.g., x, y, P₁, θ, r⃗, cosθ), numbers, formulas, or equations. Keep them EXACTLY as they appear, including all Unicode subscripts/superscripts and vector symbols.
+3. DO NOT duplicate equations. If an equation or mathematical expression appears once in the source, output it exactly once.
+4. Do NOT modify or translate any placeholders like {{EQ0}}, {{EQ1}}, etc. Preserve them exactly as they are.
+5. Return a valid JSON array of strings with the exact same length as the input.
+6. Return ONLY the JSON array, no explanation.`;
+
+  if (langName.toLowerCase() === "gujarati") {
+    systemPrompt += `
+- Terminology constraints for physics/math:
+  - Position vector -> સ્થિતિ સદિશ
+  - Displacement vector -> વિસ્થાપન સદિશ
+  - Dot product -> ડોટ ગુણાકાર
+  - Magnitude -> પરિમાણ
+  - Projection -> પ્રક્ષેપ
+  - Perpendicular -> લંબ
+  - Parallel -> સમાન્તર`;
+  }
+
+  const userPrompt = JSON.stringify(protectedTexts);
+
+  const result = await callAIWithTokens(
+    token, model, providerType,
+    systemPrompt, userPrompt,
+    0.2, 4096, false
+  );
+
+  let translated: string[];
+  try {
+    const raw = result.content.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/,"");
+    translated = JSON.parse(raw);
+    if (!Array.isArray(translated) || translated.length !== texts.length) {
+      throw new Error("Unexpected shape");
+    }
+  } catch {
+    const match = result.content.match(/\[[\s\S]*\]/);
+    if (!match) throw new Error("AI did not return a valid JSON array");
+    translated = JSON.parse(match[0]);
+  }
+
+  const restoreMath = (s: string) => {
+    if (!s) return s;
+    let restored = s;
+    for (let i = 0; i < mathBlocks.length; i++) {
+      const regex = new RegExp(`\\{\\{\\s*EQ${i}\\s*\\}\\}`, 'g');
+      restored = restored.replace(regex, () => mathBlocks[i]);
+    }
+    return restored;
+  };
+
+  return translated.map(restoreMath);
+}
+
 // ── AI-powered translation (uses the stored AI provider, no external API key needed) ──
 router.post("/ai-translate", requireAuth, async (req: Request, res: Response) => {
   try {
@@ -23,7 +100,6 @@ router.post("/ai-translate", requireAuth, async (req: Request, res: Response) =>
 
     const langName = LANG_NAMES[targetLanguage] ?? targetLanguage;
 
-    // Pick first active AI provider
     const snap = await firestore.collection("aiProviders").where("isActive", "==", true).limit(1).get();
     if (snap.empty) {
       res.status(500).json({ error: "No active AI provider configured" });
@@ -33,40 +109,62 @@ router.post("/ai-translate", requireAuth, async (req: Request, res: Response) =>
     const token = simpleDecrypt(provider.encryptedToken as string);
     const model: string = provider.defaultModel ?? "gemini-2.0-flash";
 
-    const systemPrompt = `You are an expert educational content translator. Translate the given JSON array of strings to ${langName}.
-Rules:
-- Preserve ALL LaTeX math expressions exactly (anything inside $...$, $...$, \\(...\\), \\[...\\]) — do NOT translate or modify them.
-- Preserve newlines and formatting.
-- Translate only the natural-language text around the math.
-- Return a valid JSON array with the same number of elements as the input.
-- Return ONLY the JSON array, no explanation.`;
-
-    const userPrompt = JSON.stringify(texts);
-
-    const result = await callAIWithTokens(
-      token, model, provider.providerType,
-      systemPrompt, userPrompt,
-      0.2, 4096, false,
-    );
-
-    // Parse the returned JSON array
-    let translated: string[];
-    try {
-      const raw = result.content.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/,"");
-      translated = JSON.parse(raw);
-      if (!Array.isArray(translated) || translated.length !== texts.length) {
-        throw new Error("Unexpected shape");
-      }
-    } catch {
-      // Fallback: try to extract array from anywhere in the response
-      const match = result.content.match(/\[[\s\S]*\]/);
-      if (!match) throw new Error("AI did not return a valid JSON array");
-      translated = JSON.parse(match[0]);
-    }
-
+    const translated = await protectMathAndTranslate(texts, langName, token, model, provider.providerType);
     res.json({ translations: translated });
   } catch (error: any) {
     req.log?.error({ err: error }, "AI translate error");
+    res.status(500).json({ error: "AI translation failed", details: error.message });
+  }
+});
+
+router.post("/translate-question", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { questionId, targetLanguage } = req.body;
+    if (!questionId || !targetLanguage) {
+      res.status(400).json({ error: "Missing 'questionId' or 'targetLanguage'" });
+      return;
+    }
+
+    const qDoc = await firestore.collection("questions").doc(String(questionId)).get();
+    if (!qDoc.exists) {
+      res.status(404).json({ error: "Question not found" });
+      return;
+    }
+    const q = qDoc.data() as any;
+
+    const texts = [
+      q.question || "",
+      q.explanation || "",
+      q.options || "",
+      q.correctAnswer || ""
+    ];
+
+    const langName = LANG_NAMES[targetLanguage] ?? targetLanguage;
+
+    const snap = await firestore.collection("aiProviders").where("isActive", "==", true).limit(1).get();
+    if (snap.empty) {
+      res.status(500).json({ error: "No active AI provider configured" });
+      return;
+    }
+    const provider = snapshotToArr(snap)[0] as any;
+    const token = simpleDecrypt(provider.encryptedToken as string);
+    const model: string = provider.defaultModel ?? "gemini-2.0-flash";
+
+    const translated = await protectMathAndTranslate(texts, langName, token, model, provider.providerType);
+
+    const translations = q.translations || {};
+    translations[targetLanguage] = {
+      question: translated[0],
+      explanation: translated[1],
+      options: translated[2],
+      correctAnswer: translated[3],
+    };
+
+    await firestore.collection("questions").doc(String(questionId)).update({ translations });
+
+    res.json({ success: true, translations });
+  } catch (error: any) {
+    req.log?.error({ err: error }, "AI translate question error");
     res.status(500).json({ error: "AI translation failed", details: error.message });
   }
 });

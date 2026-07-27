@@ -13,6 +13,9 @@ import generationRouter from "./generation.js";
 import papersRouter from "./papers.js";
 import analyticsRouter from "./analytics.js";
 import translateRouter from "./translate.js";
+import exportRouter from "./export.js";
+import chatRouter from "./chat.js";
+import publicRouter from "./public.js";
 
 const router: IRouter = Router();
 
@@ -30,5 +33,8 @@ router.use(generationRouter);
 router.use(papersRouter);
 router.use(analyticsRouter);
 router.use(translateRouter);
+router.use(exportRouter);
+router.use(chatRouter);
+router.use(publicRouter);
 
 export default router;

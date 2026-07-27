@@ -7,7 +7,7 @@
       "**/node_modules/**"
     ],
     "predeploy": [
-      "pnpm --filter @workspace/yunora-admin run build"
+      "pnpm -C artifacts/yunora-admin run build"
     ],
     "rewrites": [
       {
@@ -32,10 +32,9 @@
       "FIRESTORE_DATABASE_ID": "kp73"
     },
     "predeploy": [
-      "pnpm --filter @workspace/api-server run build",
+      "pnpm -C artifacts/api-server run build",
       "npm install --prefix artifacts/api-server/dist firebase-admin",
-      "rm -f artifacts/api-server/dist/package-lock.json",
-      "echo 'FIRESTORE_DATABASE_ID=kp73' > artifacts/api-server/dist/.env"
+      "node predeploy.mjs"
     ]
   }
 }
