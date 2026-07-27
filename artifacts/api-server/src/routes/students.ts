@@ -21,8 +21,8 @@ router.get("/", requireAuth, async (req, res) => {
 
     const result = students.map(student => {
       const uplan = userPlans.find(up => String(up.userId) === String(student.id));
-      let planName = null;
-      let planId = null;
+      let planName: string | null = null;
+      let planId: string | number | null = null;
       let questionsUsed = 0;
       
       if (uplan) {
