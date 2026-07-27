@@ -18,6 +18,7 @@ import PapersPage from "@/pages/papers";
 import AnalyticsPage from "@/pages/analytics";
 import TranslatePage from "@/pages/translate";
 import PlansPage from "@/pages/plans";
+import StudentsPage from "@/pages/students";
 
 const queryClient = new QueryClient();
 
@@ -36,6 +37,7 @@ function ProtectedRoutes() {
           <Route path="/analytics" component={AnalyticsPage} />
           <Route path="/translate" component={TranslatePage} />
           <Route path="/plans" component={PlansPage} />
+          <Route path="/students" component={StudentsPage} />
           <Route component={NotFound} />
         </Switch>
       </AppLayout>

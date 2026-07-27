@@ -616,6 +616,24 @@ export interface StudentRegistrationResponse {
   token: string;
 }
 
+export interface StudentWithPlan {
+  id: number;
+  email: string;
+  name: string;
+  role: string;
+  isActive: boolean;
+  createdAt: string;
+  /** @nullable */
+  planId?: number | null;
+  /** @nullable */
+  planName?: string | null;
+  questionsUsed: number;
+}
+
+export interface StudentList {
+  data: StudentWithPlan[];
+}
+
 export type ListBoardsParams = {
 search?: string;
 page?: number;

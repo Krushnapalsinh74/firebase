@@ -71,6 +71,7 @@ import type {
   StandardInput,
   StandardList,
   StandardUpdate,
+  StudentList,
   StudentRegistrationInput,
   StudentRegistrationResponse,
   Subject,
@@ -4137,6 +4138,83 @@ export const useVerifyPayment = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getVerifyPaymentMutationOptions(options));
     }
+
+export const getListStudentsUrl = () => {
+
+
+
+
+  return `/api/students`
+}
+
+/**
+ * @summary List all registered students
+ */
+export const listStudents = async ( options?: RequestInit): Promise<StudentList> => {
+
+  return customFetch<StudentList>(getListStudentsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListStudentsQueryKey = () => {
+    return [
+    `/api/students`
+    ] as const;
+    }
+
+
+export const getListStudentsQueryOptions = <TData = Awaited<ReturnType<typeof listStudents>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStudents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListStudentsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listStudents>>> = ({ signal }) => listStudents({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listStudents>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListStudentsQueryResult = NonNullable<Awaited<ReturnType<typeof listStudents>>>
+export type ListStudentsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List all registered students
+ */
+
+export function useListStudents<TData = Awaited<ReturnType<typeof listStudents>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStudents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListStudentsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getRegisterStudentUrl = () => {
 

@@ -1058,6 +1058,24 @@ export const VerifyPaymentResponse = zod.object({
 
 
 /**
+ * @summary List all registered students
+ */
+export const ListStudentsResponse = zod.object({
+  "data": zod.array(zod.object({
+  "id": zod.number(),
+  "email": zod.string().email(),
+  "name": zod.string(),
+  "role": zod.string(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "planId": zod.number().nullish(),
+  "planName": zod.string().nullish(),
+  "questionsUsed": zod.number()
+}))
+})
+
+
+/**
  * @summary Register a new student with a plan
  */
 export const RegisterStudentBody = zod.object({
