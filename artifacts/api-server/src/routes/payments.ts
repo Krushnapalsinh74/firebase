@@ -6,10 +6,29 @@ import crypto from "crypto";
 
 const router = Router();
 
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || "test_key",
-  key_secret: process.env.RAZORPAY_KEY_SECRET || "test_secret",
-});
+async function getRazorpay() {
+  const docSnap = await firestore.collection("settings").doc("payment").get();
+  if (!docSnap.exists) {
+    return null;
+  }
+  const data = docToObj(docSnap) as any;
+  if (!data?.razorpayKeyId || !data?.razorpayKeySecret) {
+    return null;
+  }
+  return new Razorpay({
+    key_id: data.razorpayKeyId,
+    key_secret: data.razorpayKeySecret,
+  });
+}
+
+async function getRazorpaySecret() {
+  const docSnap = await firestore.collection("settings").doc("payment").get();
+  if (!docSnap.exists) {
+    return null;
+  }
+  const data = docToObj(docSnap) as any;
+  return data?.razorpayKeySecret || null;
+}
 
 router.post("/order", requireAuth, async (req, res) => {
   try {
@@ -25,6 +44,12 @@ router.post("/order", requireAuth, async (req, res) => {
     const plan = docToObj(doc);
     if (!plan) {
       res.status(404).json({ error: "Plan not found" });
+      return;
+    }
+
+    const razorpay = await getRazorpay();
+    if (!razorpay) {
+      res.status(500).json({ error: "Payment configuration is missing" });
       return;
     }
 
@@ -67,9 +92,13 @@ router.post("/order", requireAuth, async (req, res) => {
 router.post("/verify", requireAuth, async (req, res) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
-    const secret = process.env.RAZORPAY_KEY_SECRET || "test_secret";
+    const secret = await getRazorpaySecret();
+    if (!secret) {
+      res.status(500).json({ error: "Payment configuration is missing", success: false });
+      return;
+    }
     
-    const hmac = crypto.createHmac("sha256", secret);
+    const hmac = crypto.createHmac("sha256", secret as string);
     hmac.update(razorpay_order_id + "|" + razorpay_payment_id);
     const generatedSignature = hmac.digest("hex");
 

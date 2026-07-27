@@ -19,6 +19,8 @@ import publicRouter from "./public.js";
 import { plansRouter } from "./plans.js";
 import { paymentsRouter } from "./payments.js";
 import { studentsRouter } from "./students.js";
+import { usersRouter } from "./users.js";
+import settingsRouter from "./settings.js";
 
 const router: IRouter = Router();
 
@@ -42,5 +44,7 @@ router.use(publicRouter);
 router.use("/plans", plansRouter);
 router.use("/payments", paymentsRouter);
 router.use("/students", studentsRouter);
+router.use(usersRouter);
+router.use("/settings", settingsRouter);
 
 export default router;

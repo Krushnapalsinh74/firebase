@@ -15,7 +15,8 @@ import {
   Moon,
   Globe,
   IndianRupee,
-  Users
+  Users,
+  Settings
 } from 'lucide-react';
 import { useAuthStore } from '@/hooks/use-auth';
 import { useThemeStore } from '@/hooks/use-theme';
@@ -35,6 +36,7 @@ const navItems = [
   { href: '/translate', label: 'Translate', icon: Globe },
   { href: '/plans', label: 'Plans & Pricing', icon: IndianRupee },
   { href: '/students', label: 'Students', icon: Users },
+  { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
 function NavLinks() {

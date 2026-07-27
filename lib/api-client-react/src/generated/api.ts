@@ -58,6 +58,7 @@ import type {
   Paper,
   PaperInput,
   PaperList,
+  PaymentSettings,
   Plan,
   PlanInput,
   PlanList,
@@ -2934,6 +2935,154 @@ export const useTestAiProvider = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getTestAiProviderMutationOptions(options));
+    }
+
+export const getGetPaymentSettingsUrl = () => {
+
+
+
+
+  return `/api/settings/payment`
+}
+
+/**
+ * @summary Get payment configuration
+ */
+export const getPaymentSettings = async ( options?: RequestInit): Promise<PaymentSettings> => {
+
+  return customFetch<PaymentSettings>(getGetPaymentSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPaymentSettingsQueryKey = () => {
+    return [
+    `/api/settings/payment`
+    ] as const;
+    }
+
+
+export const getGetPaymentSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getPaymentSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPaymentSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPaymentSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPaymentSettings>>> = ({ signal }) => getPaymentSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPaymentSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPaymentSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getPaymentSettings>>>
+export type GetPaymentSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get payment configuration
+ */
+
+export function useGetPaymentSettings<TData = Awaited<ReturnType<typeof getPaymentSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPaymentSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPaymentSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdatePaymentSettingsUrl = () => {
+
+
+
+
+  return `/api/settings/payment`
+}
+
+/**
+ * @summary Update payment configuration
+ */
+export const updatePaymentSettings = async (paymentSettings: PaymentSettings, options?: RequestInit): Promise<PaymentSettings> => {
+
+  return customFetch<PaymentSettings>(getUpdatePaymentSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      paymentSettings,)
+  }
+);}
+
+
+
+
+export const getUpdatePaymentSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePaymentSettings>>, TError,{data: BodyType<PaymentSettings>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updatePaymentSettings>>, TError,{data: BodyType<PaymentSettings>}, TContext> => {
+
+const mutationKey = ['updatePaymentSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updatePaymentSettings>>, {data: BodyType<PaymentSettings>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updatePaymentSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdatePaymentSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updatePaymentSettings>>>
+    export type UpdatePaymentSettingsMutationBody = BodyType<PaymentSettings>
+    export type UpdatePaymentSettingsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update payment configuration
+ */
+export const useUpdatePaymentSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePaymentSettings>>, TError,{data: BodyType<PaymentSettings>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updatePaymentSettings>>,
+        TError,
+        {data: BodyType<PaymentSettings>},
+        TContext
+      > => {
+      return useMutation(getUpdatePaymentSettingsMutationOptions(options));
     }
 
 export const getListPapersUrl = (params?: ListPapersParams,) => {

@@ -863,6 +863,40 @@ paths:
                 $ref: "#/components/schemas/ProviderTestResult"
 
   # ── PAPERS ────────────────────────────────────────────────────────────────────
+  /settings/payment:
+    get:
+      operationId: getPaymentSettings
+      tags: [settings]
+      summary: Get payment configuration
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Payment settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentSettings"
+    put:
+      operationId: updatePaymentSettings
+      tags: [settings]
+      summary: Update payment configuration
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentSettings"
+      responses:
+        "200":
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentSettings"
+
   /papers:
     get:
       operationId: listPapers
@@ -1868,3 +1902,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/StudentWithPlan"
+
+    PaymentSettings:
+      type: object
+      required: [razorpayKeyId, razorpayKeySecret]
+      properties:
+        razorpayKeyId: { type: string }
+        razorpayKeySecret: { type: string }

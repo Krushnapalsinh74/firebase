@@ -662,6 +662,11 @@ export interface StudentList {
   data: StudentWithPlan[];
 }
 
+export interface PaymentSettings {
+  razorpayKeyId: string;
+  razorpayKeySecret: string;
+}
+
 export type ListBoardsParams = {
 search?: string;
 page?: number;

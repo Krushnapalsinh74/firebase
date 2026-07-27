@@ -796,6 +796,29 @@ export const TestAiProviderResponse = zod.object({
 
 
 /**
+ * @summary Get payment configuration
+ */
+export const GetPaymentSettingsResponse = zod.object({
+  "razorpayKeyId": zod.string(),
+  "razorpayKeySecret": zod.string()
+})
+
+
+/**
+ * @summary Update payment configuration
+ */
+export const UpdatePaymentSettingsBody = zod.object({
+  "razorpayKeyId": zod.string(),
+  "razorpayKeySecret": zod.string()
+})
+
+export const UpdatePaymentSettingsResponse = zod.object({
+  "razorpayKeyId": zod.string(),
+  "razorpayKeySecret": zod.string()
+})
+
+
+/**
  * @summary List generated papers
  */
 export const listPapersQueryPageDefault = 1;

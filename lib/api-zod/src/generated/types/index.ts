@@ -51,6 +51,7 @@ export * from './orderResponse';
 export * from './paper';
 export * from './paperInput';
 export * from './paperList';
+export * from './paymentSettings';
 export * from './plan';
 export * from './planAccessScope';
 export * from './planInput';
