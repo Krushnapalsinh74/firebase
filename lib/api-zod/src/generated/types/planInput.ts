@@ -5,11 +5,15 @@
  * Yunora AI Question Generation Admin Panel API
  * OpenAPI spec version: 0.1.0
  */
+import type { PlanInputAccessScope } from './planInputAccessScope';
 
 export interface PlanInput {
   name: string;
   price: number;
   questionLimit: number;
+  accessScope?: PlanInputAccessScope;
+  /** @nullable */
+  durationDays?: number | null;
   /** @nullable */
   boardId?: number | null;
   /** @nullable */

@@ -536,11 +536,25 @@ export interface MonthlyReport {
   avgQualityScore: number;
 }
 
+export type PlanAccessScope = typeof PlanAccessScope[keyof typeof PlanAccessScope];
+
+
+export const PlanAccessScope = {
+  all: 'all',
+  board: 'board',
+  standard: 'standard',
+  subject: 'subject',
+  chapter: 'chapter',
+} as const;
+
 export interface Plan {
   id: number;
   name: string;
   price: number;
   questionLimit: number;
+  accessScope?: PlanAccessScope;
+  /** @nullable */
+  durationDays?: number | null;
   /** @nullable */
   boardId?: number | null;
   /** @nullable */
@@ -553,10 +567,24 @@ export interface Plan {
   createdAt: string;
 }
 
+export type PlanInputAccessScope = typeof PlanInputAccessScope[keyof typeof PlanInputAccessScope];
+
+
+export const PlanInputAccessScope = {
+  all: 'all',
+  board: 'board',
+  standard: 'standard',
+  subject: 'subject',
+  chapter: 'chapter',
+} as const;
+
 export interface PlanInput {
   name: string;
   price: number;
   questionLimit: number;
+  accessScope?: PlanInputAccessScope;
+  /** @nullable */
+  durationDays?: number | null;
   /** @nullable */
   boardId?: number | null;
   /** @nullable */

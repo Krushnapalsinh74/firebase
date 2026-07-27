@@ -1758,6 +1758,8 @@ components:
         name: { type: string }
         price: { type: number }
         questionLimit: { type: integer }
+        accessScope: { type: string, enum: [all, board, standard, subject, chapter], default: all }
+        durationDays: { type: ["integer", "null"] }
         boardId: { type: ["integer", "null"] }
         standardId: { type: ["integer", "null"] }
         subjectId: { type: ["integer", "null"] }
@@ -1772,6 +1774,8 @@ components:
         name: { type: string }
         price: { type: number }
         questionLimit: { type: integer }
+        accessScope: { type: string, enum: [all, board, standard, subject, chapter], default: all }
+        durationDays: { type: ["integer", "null"] }
         boardId: { type: ["integer", "null"] }
         standardId: { type: ["integer", "null"] }
         subjectId: { type: ["integer", "null"] }

@@ -941,12 +941,16 @@ export const GetMonthlyReportResponse = zod.array(GetMonthlyReportResponseItem)
 /**
  * @summary List all plans
  */
+export const listPlansResponseDataItemAccessScopeDefault = `all`;
+
 export const ListPlansResponse = zod.object({
   "data": zod.array(zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "price": zod.number(),
   "questionLimit": zod.number(),
+  "accessScope": zod.enum(['all', 'board', 'standard', 'subject', 'chapter']).default(listPlansResponseDataItemAccessScopeDefault),
+  "durationDays": zod.number().nullish(),
   "boardId": zod.number().nullish(),
   "standardId": zod.number().nullish(),
   "subjectId": zod.number().nullish(),
@@ -960,12 +964,15 @@ export const ListPlansResponse = zod.object({
 /**
  * @summary Create a plan
  */
+export const createPlanBodyAccessScopeDefault = `all`;
 export const createPlanBodyIsActiveDefault = true;
 
 export const CreatePlanBody = zod.object({
   "name": zod.string(),
   "price": zod.number(),
   "questionLimit": zod.number(),
+  "accessScope": zod.enum(['all', 'board', 'standard', 'subject', 'chapter']).default(createPlanBodyAccessScopeDefault),
+  "durationDays": zod.number().nullish(),
   "boardId": zod.number().nullish(),
   "standardId": zod.number().nullish(),
   "subjectId": zod.number().nullish(),
@@ -981,11 +988,15 @@ export const GetPlanParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const getPlanResponseAccessScopeDefault = `all`;
+
 export const GetPlanResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "price": zod.number(),
   "questionLimit": zod.number(),
+  "accessScope": zod.enum(['all', 'board', 'standard', 'subject', 'chapter']).default(getPlanResponseAccessScopeDefault),
+  "durationDays": zod.number().nullish(),
   "boardId": zod.number().nullish(),
   "standardId": zod.number().nullish(),
   "subjectId": zod.number().nullish(),
@@ -1013,11 +1024,15 @@ export const UpdatePlanBody = zod.object({
   "isActive": zod.boolean().optional()
 })
 
+export const updatePlanResponseAccessScopeDefault = `all`;
+
 export const UpdatePlanResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "price": zod.number(),
   "questionLimit": zod.number(),
+  "accessScope": zod.enum(['all', 'board', 'standard', 'subject', 'chapter']).default(updatePlanResponseAccessScopeDefault),
+  "durationDays": zod.number().nullish(),
   "boardId": zod.number().nullish(),
   "standardId": zod.number().nullish(),
   "subjectId": zod.number().nullish(),

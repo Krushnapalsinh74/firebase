@@ -9,7 +9,7 @@ const router = Router();
 router.get("/", requireAuth, async (req, res) => {
   try {
     // Get all users who are not admins (or specifically 'viewer'/'student')
-    const usersSnap = await firestore.collection("users").where("role", "==", "viewer").get();
+    const usersSnap = await firestore.collection("users").where("role", "in", ["viewer", "student"]).get();
     let students = snapshotToArr(usersSnap) as any[];
 
     // Fetch user_plans and plans to enrich data
