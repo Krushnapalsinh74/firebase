@@ -33,6 +33,12 @@ tags:
     description: Generated papers / PDF export
   - name: analytics
     description: Analytics and reporting
+  - name: plans
+    description: Plans and pricing
+  - name: payments
+    description: Razorpay payments
+  - name: students
+    description: Student registration and management
 
 paths:
   /healthz:
@@ -1023,6 +1029,164 @@ paths:
                 items:
                   $ref: "#/components/schemas/MonthlyReport"
 
+  # ── PLANS ──────────────────────────────────────────────────────────────────
+  /plans:
+    get:
+      operationId: listPlans
+      tags: [plans]
+      summary: List all plans
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of plans
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlanList"
+    post:
+      operationId: createPlan
+      tags: [plans]
+      summary: Create a plan
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanInput"
+      responses:
+        "201":
+          description: Created plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+
+  /plans/{id}:
+    get:
+      operationId: getPlan
+      tags: [plans]
+      summary: Get plan by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+    patch:
+      operationId: updatePlan
+      tags: [plans]
+      summary: Update plan
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanUpdate"
+      responses:
+        "200":
+          description: Updated plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+    delete:
+      operationId: deletePlan
+      tags: [plans]
+      summary: Delete plan
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  # ── PAYMENTS ───────────────────────────────────────────────────────────────
+  /payments/order:
+    post:
+      operationId: createOrder
+      tags: [payments]
+      summary: Create Razorpay Order
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderInput"
+      responses:
+        "201":
+          description: Order created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderResponse"
+
+  /payments/verify:
+    post:
+      operationId: verifyPayment
+      tags: [payments]
+      summary: Verify Razorpay Payment Signature
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyPaymentInput"
+      responses:
+        "200":
+          description: Payment verified
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+
+  # ── STUDENTS ───────────────────────────────────────────────────────────────
+  /students/register:
+    post:
+      operationId: registerStudent
+      tags: [students]
+      summary: Register a new student with a plan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudentRegistrationInput"
+      responses:
+        "201":
+          description: Student registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudentRegistrationResponse"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1569,3 +1733,96 @@ components:
         label: { type: string }
         count: { type: integer }
         avgQualityScore: { type: number }
+
+    # ── PLANS ─────────────────────────────────────────────────────────────────
+    Plan:
+      type: object
+      required: [id, name, price, questionLimit, isActive, createdAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        price: { type: number }
+        questionLimit: { type: integer }
+        boardId: { type: ["integer", "null"] }
+        standardId: { type: ["integer", "null"] }
+        subjectId: { type: ["integer", "null"] }
+        chapterId: { type: ["integer", "null"] }
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    PlanInput:
+      type: object
+      required: [name, price, questionLimit]
+      properties:
+        name: { type: string }
+        price: { type: number }
+        questionLimit: { type: integer }
+        boardId: { type: ["integer", "null"] }
+        standardId: { type: ["integer", "null"] }
+        subjectId: { type: ["integer", "null"] }
+        chapterId: { type: ["integer", "null"] }
+        isActive: { type: boolean, default: true }
+
+    PlanUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        price: { type: number }
+        questionLimit: { type: integer }
+        boardId: { type: ["integer", "null"] }
+        standardId: { type: ["integer", "null"] }
+        subjectId: { type: ["integer", "null"] }
+        chapterId: { type: ["integer", "null"] }
+        isActive: { type: boolean }
+
+    PlanList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Plan"
+
+    # ── PAYMENTS ──────────────────────────────────────────────────────────────
+    OrderInput:
+      type: object
+      required: [planId]
+      properties:
+        planId: { type: integer }
+
+    OrderResponse:
+      type: object
+      required: [id, amount, currency]
+      properties:
+        id: { type: string }
+        amount: { type: number }
+        currency: { type: string }
+
+    VerifyPaymentInput:
+      type: object
+      required: [razorpay_order_id, razorpay_payment_id, razorpay_signature]
+      properties:
+        razorpay_order_id: { type: string }
+        razorpay_payment_id: { type: string }
+        razorpay_signature: { type: string }
+
+    # ── STUDENTS ──────────────────────────────────────────────────────────────
+    StudentRegistrationInput:
+      type: object
+      required: [name, email, password, planId]
+      properties:
+        name: { type: string }
+        email: { type: string, format: email }
+        password: { type: string }
+        planId: { type: integer }
+
+    StudentRegistrationResponse:
+      type: object
+      required: [user, order, token]
+      properties:
+        user: 
+          $ref: "#/components/schemas/User"
+        order:
+          $ref: "#/components/schemas/OrderResponse"
+        token: { type: string }

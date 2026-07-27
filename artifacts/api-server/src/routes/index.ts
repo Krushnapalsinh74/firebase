@@ -16,6 +16,9 @@ import translateRouter from "./translate.js";
 import exportRouter from "./export.js";
 import chatRouter from "./chat.js";
 import publicRouter from "./public.js";
+import { plansRouter } from "./plans.js";
+import { paymentsRouter } from "./payments.js";
+import { studentsRouter } from "./students.js";
 
 const router: IRouter = Router();
 
@@ -36,5 +39,8 @@ router.use(translateRouter);
 router.use(exportRouter);
 router.use(chatRouter);
 router.use(publicRouter);
+router.use("/plans", plansRouter);
+router.use("/payments", paymentsRouter);
+router.use("/students", studentsRouter);
 
 export default router;

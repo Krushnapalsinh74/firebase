@@ -13,7 +13,8 @@ import {
   Menu,
   Sun,
   Moon,
-  Globe
+  Globe,
+  IndianRupee
 } from 'lucide-react';
 import { useAuthStore } from '@/hooks/use-auth';
 import { useThemeStore } from '@/hooks/use-theme';
@@ -31,6 +32,7 @@ const navItems = [
   { href: '/papers', label: 'Papers', icon: FileText },
   { href: '/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/translate', label: 'Translate', icon: Globe },
+  { href: '/plans', label: 'Plans & Pricing', icon: IndianRupee },
 ];
 
 function NavLinks() {

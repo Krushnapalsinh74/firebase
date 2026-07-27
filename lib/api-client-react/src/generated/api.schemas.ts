@@ -536,6 +536,86 @@ export interface MonthlyReport {
   avgQualityScore: number;
 }
 
+export interface Plan {
+  id: number;
+  name: string;
+  price: number;
+  questionLimit: number;
+  /** @nullable */
+  boardId?: number | null;
+  /** @nullable */
+  standardId?: number | null;
+  /** @nullable */
+  subjectId?: number | null;
+  /** @nullable */
+  chapterId?: number | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface PlanInput {
+  name: string;
+  price: number;
+  questionLimit: number;
+  /** @nullable */
+  boardId?: number | null;
+  /** @nullable */
+  standardId?: number | null;
+  /** @nullable */
+  subjectId?: number | null;
+  /** @nullable */
+  chapterId?: number | null;
+  isActive?: boolean;
+}
+
+export interface PlanUpdate {
+  name?: string;
+  price?: number;
+  questionLimit?: number;
+  /** @nullable */
+  boardId?: number | null;
+  /** @nullable */
+  standardId?: number | null;
+  /** @nullable */
+  subjectId?: number | null;
+  /** @nullable */
+  chapterId?: number | null;
+  isActive?: boolean;
+}
+
+export interface PlanList {
+  data: Plan[];
+}
+
+export interface OrderInput {
+  planId: number;
+}
+
+export interface OrderResponse {
+  id: string;
+  amount: number;
+  currency: string;
+}
+
+export interface VerifyPaymentInput {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+}
+
+export interface StudentRegistrationInput {
+  name: string;
+  email: string;
+  password: string;
+  planId: number;
+}
+
+export interface StudentRegistrationResponse {
+  user: User;
+  order: OrderResponse;
+  token: string;
+}
+
 export type ListBoardsParams = {
 search?: string;
 page?: number;
@@ -610,5 +690,9 @@ limit?: number;
 
 export type GetRecentActivityParams = {
 limit?: number;
+};
+
+export type VerifyPayment200 = {
+  success?: boolean;
 };
 

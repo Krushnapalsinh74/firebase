@@ -938,3 +938,133 @@ export const GetMonthlyReportResponseItem = zod.object({
 export const GetMonthlyReportResponse = zod.array(GetMonthlyReportResponseItem)
 
 
+/**
+ * @summary List all plans
+ */
+export const ListPlansResponse = zod.object({
+  "data": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "price": zod.number(),
+  "questionLimit": zod.number(),
+  "boardId": zod.number().nullish(),
+  "standardId": zod.number().nullish(),
+  "subjectId": zod.number().nullish(),
+  "chapterId": zod.number().nullish(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Create a plan
+ */
+export const createPlanBodyIsActiveDefault = true;
+
+export const CreatePlanBody = zod.object({
+  "name": zod.string(),
+  "price": zod.number(),
+  "questionLimit": zod.number(),
+  "boardId": zod.number().nullish(),
+  "standardId": zod.number().nullish(),
+  "subjectId": zod.number().nullish(),
+  "chapterId": zod.number().nullish(),
+  "isActive": zod.boolean().default(createPlanBodyIsActiveDefault)
+})
+
+
+/**
+ * @summary Get plan by ID
+ */
+export const GetPlanParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetPlanResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "price": zod.number(),
+  "questionLimit": zod.number(),
+  "boardId": zod.number().nullish(),
+  "standardId": zod.number().nullish(),
+  "subjectId": zod.number().nullish(),
+  "chapterId": zod.number().nullish(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update plan
+ */
+export const UpdatePlanParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdatePlanBody = zod.object({
+  "name": zod.string().optional(),
+  "price": zod.number().optional(),
+  "questionLimit": zod.number().optional(),
+  "boardId": zod.number().nullish(),
+  "standardId": zod.number().nullish(),
+  "subjectId": zod.number().nullish(),
+  "chapterId": zod.number().nullish(),
+  "isActive": zod.boolean().optional()
+})
+
+export const UpdatePlanResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "price": zod.number(),
+  "questionLimit": zod.number(),
+  "boardId": zod.number().nullish(),
+  "standardId": zod.number().nullish(),
+  "subjectId": zod.number().nullish(),
+  "chapterId": zod.number().nullish(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete plan
+ */
+export const DeletePlanParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Create Razorpay Order
+ */
+export const CreateOrderBody = zod.object({
+  "planId": zod.number()
+})
+
+
+/**
+ * @summary Verify Razorpay Payment Signature
+ */
+export const VerifyPaymentBody = zod.object({
+  "razorpay_order_id": zod.string(),
+  "razorpay_payment_id": zod.string(),
+  "razorpay_signature": zod.string()
+})
+
+export const VerifyPaymentResponse = zod.object({
+  "success": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Register a new student with a plan
+ */
+export const RegisterStudentBody = zod.object({
+  "name": zod.string(),
+  "email": zod.string().email(),
+  "password": zod.string(),
+  "planId": zod.number()
+})
+
+
