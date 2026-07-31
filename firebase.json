@@ -33,7 +33,6 @@
     },
     "predeploy": [
       "pnpm -C artifacts/api-server run build",
-      "npm install --prefix artifacts/api-server/dist firebase-admin",
       "node predeploy.mjs"
     ]
   }

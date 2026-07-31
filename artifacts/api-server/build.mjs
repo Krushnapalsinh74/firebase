@@ -148,7 +148,10 @@ async function writeFirebaseFiles() {
     version: srcPkg.version,
     private: true,
     main: "lambda.mjs",
-    dependencies: {},
+    dependencies: {
+      "firebase-admin": srcPkg.dependencies["firebase-admin"],
+      "@google-cloud/firestore": srcPkg.dependencies["@google-cloud/firestore"]
+    },
   };
 
   const distDir = path.resolve(artifactDir, "dist");
