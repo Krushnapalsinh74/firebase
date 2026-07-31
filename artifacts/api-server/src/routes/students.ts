@@ -1,51 +1,90 @@
 import { Router } from "express";
-import { firestore, nextId, docToObj, snapshotToArr, nowTs } from "@workspace/db";
+import { firestore, nextId, docToObj, nowTs } from "@workspace/db";
 import { requireAuth } from "../lib/auth.js";
+import { getAuth } from "firebase-admin/auth";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
 const router = Router();
 
+// ── GET /students — list all users from Firebase Auth + enrich with Firestore ─
 router.get("/students", requireAuth, async (req, res) => {
   try {
-    // Get ALL users except admins so all mobile app users are visible
+    // 1. Pull ALL users from Firebase Auth (the real source of truth)
+    const authUsers: any[] = [];
+    let pageToken: string | undefined;
+    do {
+      const result = await getAuth().listUsers(1000, pageToken);
+      authUsers.push(...result.users);
+      pageToken = result.pageToken;
+    } while (pageToken);
+
+    // 2. Pull Firestore profiles for extra fields (name, board, etc.)
     const usersSnap = await firestore.collection("users").get();
-    let allUsers = snapshotToArr(usersSnap) as any[];
-    // Exclude admin accounts
-    let students = allUsers.filter(u => u.role !== "admin");
-
-    // Fetch user_plans and plans to enrich data
-    const userPlansSnap = await firestore.collection("user_plans").get();
-    const userPlans = snapshotToArr(userPlansSnap) as any[];
-
-    const plansSnap = await firestore.collection("plans").get();
-    const plans = snapshotToArr(plansSnap) as any[];
-
-    const result = students.map(student => {
-      const uplan = userPlans.find(up => String(up.userId) === String(student.id));
-      let planName: string | null = null;
-      let planId: string | number | null = null;
-      let questionsUsed = 0;
-      
-      if (uplan) {
-        planId = uplan.planId;
-        questionsUsed = uplan.questionsUsed || 0;
-        const plan = plans.find(p => String(p.id) === String(planId));
-        if (plan) planName = plan.name;
-      }
-
-      return {
-        id: student.id,
-        email: student.email,
-        name: student.name || student.email,
-        role: student.role || 'student',
-        isActive: student.isActive ?? true,
-        createdAt: student.createdAt?.toDate?.()?.toISOString() || new Date(student.createdAt || Date.now()).toISOString(),
-        planId,
-        planName,
-        questionsUsed,
-      };
+    const firestoreByEmail: Record<string, any> = {};
+    const firestoreByPhone: Record<string, any> = {};
+    usersSnap.docs.forEach(d => {
+      const data = { id: d.id, ...d.data() } as any;
+      if (data.email) firestoreByEmail[data.email] = data;
+      const phone = data.phone || data.phoneNumber;
+      if (phone) firestoreByPhone[phone] = data;
     });
+
+    // 3. Pull user_plans + plans for subscription info
+    const userPlansSnap = await firestore.collection("user_plans").get();
+    const userPlans = userPlansSnap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+    const plansSnap = await firestore.collection("plans").get();
+    const plans = plansSnap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+
+    // Admin emails to exclude from student list
+    const ADMIN_EMAILS = new Set(["admin@yunora.ai", "admin@kpark.com", "admin@yunora.edu"]);
+
+    // 4. Merge Firebase Auth + Firestore + plan data
+    const result = authUsers
+      .filter(u => !ADMIN_EMAILS.has(u.email || ""))
+      .map(authUser => {
+        const profile =
+          firestoreByEmail[authUser.email || ""] ||
+          firestoreByPhone[authUser.phoneNumber || ""] ||
+          null;
+
+        const uid = authUser.uid;
+        const uplan = userPlans.find(up =>
+          String(up.userId) === String(profile?.id) || String(up.uid) === uid
+        );
+
+        let planName: string | null = null;
+        let questionsUsed = 0;
+        if (uplan) {
+          questionsUsed = uplan.questionsUsed || 0;
+          const plan = plans.find(p => String(p.id) === String(uplan.planId));
+          if (plan) planName = (plan as any).name;
+        }
+
+        const name =
+          profile?.name ||
+          authUser.displayName ||
+          authUser.email ||
+          authUser.phoneNumber ||
+          "Unknown";
+
+        return {
+          id: profile?.id || uid,
+          uid,
+          email: authUser.email || profile?.email || null,
+          phone: authUser.phoneNumber || profile?.phone || null,
+          name,
+          role: profile?.role || "student",
+          isActive: !authUser.disabled,
+          provider: authUser.providerData?.[0]?.providerId || "unknown",
+          createdAt: authUser.metadata?.creationTime || new Date().toISOString(),
+          lastSignIn: authUser.metadata?.lastSignInTime || null,
+          planName,
+          questionsUsed,
+        };
+      })
+      // Sort newest first
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     res.json({ data: result });
   } catch (err) {
@@ -54,7 +93,8 @@ router.get("/students", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/register", async (req, res) => {
+// ── POST /students/register — register a new student with a plan ──────────────
+router.post("/students/register", async (req, res) => {
   try {
     const { name, email, password, planId } = req.body;
 
@@ -63,14 +103,12 @@ router.post("/register", async (req, res) => {
       return;
     }
 
-    // Check if user exists
     const usersSnap = await firestore.collection("users").where("email", "==", email).limit(1).get();
     if (!usersSnap.empty) {
       res.status(400).json({ error: "Email already in use" });
       return;
     }
 
-    // Check if plan exists
     const planDoc = await firestore.collection("plans").doc(String(planId)).get();
     const plan = docToObj(planDoc);
     if (!plan) {
@@ -78,58 +116,29 @@ router.post("/register", async (req, res) => {
       return;
     }
 
-    // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
-
-    // Create user (student role)
     const userId = await nextId("users");
     const now = nowTs();
-    const userData = {
-      id: userId,
-      email,
-      name,
-      passwordHash,
-      role: "viewer", // or student
-      isActive: true,
-      createdAt: now,
-      updatedAt: now,
-    };
-    await firestore.collection("users").doc(String(userId)).set(userData);
-
-    // Create user plan
-    const userPlanId = await nextId("user_plans");
-    await firestore.collection("user_plans").doc(String(userPlanId)).set({
-      id: userPlanId,
-      userId,
-      planId,
-      questionsUsed: 0,
-      isActive: true,
-      createdAt: now,
-      updatedAt: now,
+    await firestore.collection("users").doc(String(userId)).set({
+      id: userId, email, name, passwordHash,
+      role: "student", isActive: true,
+      createdAt: now, updatedAt: now,
     });
 
-    // Generate token
+    const userPlanId = await nextId("user_plans");
+    await firestore.collection("user_plans").doc(String(userPlanId)).set({
+      id: userPlanId, userId, planId,
+      questionsUsed: 0, isActive: true,
+      createdAt: now, updatedAt: now,
+    });
+
     const jwtSecret = process.env.JWT_SECRET || "fallback_secret";
-    const token = jwt.sign(
-      { id: userId, email, role: "viewer" },
-      jwtSecret,
-      { expiresIn: "7d" }
-    );
+    const token = jwt.sign({ id: userId, email, role: "student" }, jwtSecret, { expiresIn: "7d" });
 
     res.status(201).json({
-      user: {
-        id: userId,
-        email,
-        name,
-        role: "viewer",
-        createdAt: now.toDate().toISOString(),
-      },
+      user: { id: userId, email, name, role: "student", createdAt: now.toDate().toISOString() },
       token,
-      order: {
-        id: "mock_order_for_registration",
-        amount: Number(plan.price || 0),
-        currency: "INR"
-      }
+      order: { id: "mock_order_for_registration", amount: Number(plan.price || 0), currency: "INR" }
     });
   } catch (err) {
     req.log.error({ err }, "Error registering student");
