@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import { firestore, nextId, nowTs } from "@workspace/db";
 import { logger } from "./logger.js";
 
-const ADMIN_EMAIL    = "admin@yunora.ai";
+const ADMIN_EMAIL    = "admin@kpark.com";
 const ADMIN_PASSWORD = "admin123";
 
 async function isEmpty(collection: string): Promise<boolean> {

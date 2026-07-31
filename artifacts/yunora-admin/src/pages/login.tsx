@@ -73,9 +73,9 @@ export default function LoginPage() {
         
         <div className="relative z-10">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground mb-4">
-            <span className="font-bold text-xl">Y</span>
+            <span className="font-bold text-xl">K</span>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">Yunora</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Knowledge Park</h1>
         </div>
         
         <div className="relative z-10 max-w-lg">
@@ -88,7 +88,7 @@ export default function LoginPage() {
         </div>
         
         <div className="relative z-10 text-sm text-zinc-500">
-          &copy; {new Date().getFullYear()} Yunora Education Systems
+          &copy; {new Date().getFullYear()} Knowledge Park Education
         </div>
       </div>
 
@@ -96,7 +96,7 @@ export default function LoginPage() {
       <div className="flex-1 flex items-center justify-center p-8 md:p-12 lg:p-24 relative bg-card">
         <div className="w-full max-w-md flex flex-col justify-center space-y-8">
           <div className="md:hidden flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground mb-4 mx-auto">
-            <span className="font-bold text-xl">Y</span>
+            <span className="font-bold text-xl">K</span>
           </div>
           
           <div className="text-center md:text-left space-y-2">
@@ -116,7 +116,7 @@ export default function LoginPage() {
                     <FormLabel>Email</FormLabel>
                     <FormControl>
                       <Input 
-                        placeholder="admin@yunora.edu" 
+                        placeholder="admin@knowledgepark.edu" 
                         type="email" 
                         autoComplete="email"
                         {...field} 

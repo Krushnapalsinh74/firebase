@@ -77,7 +77,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <span className="font-bold">Y</span>
           </div>
-          <span className="font-semibold tracking-tight">Yunora</span>
+          <span className="font-semibold tracking-tight">Knowledge Park</span>
         </div>
         <Sheet>
           <SheetTrigger asChild>
@@ -87,7 +87,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </SheetTrigger>
           <SheetContent side="left" className="w-[240px] flex flex-col">
             <div className="flex h-14 items-center px-2">
-              <span className="font-semibold tracking-tight text-lg">Yunora</span>
+              <span className="font-semibold tracking-tight text-lg">Knowledge Park</span>
             </div>
             <Separator className="mb-4" />
             <div className="flex-1 overflow-auto">
@@ -112,7 +112,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <span className="font-bold">Y</span>
           </div>
-          <span className="font-bold tracking-tight text-lg">Yunora</span>
+          <span className="font-bold tracking-tight text-lg">Knowledge Park</span>
         </div>
         
         <div className="flex-1 overflow-auto px-3 py-4">
@@ -123,7 +123,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center justify-between">
             <div className="flex flex-col overflow-hidden">
               <span className="text-sm font-medium truncate">{user?.name || 'Admin'}</span>
-              <span className="text-xs text-muted-foreground truncate">{user?.email || 'admin@yunora.com'}</span>
+              <span className="text-xs text-muted-foreground truncate">{user?.email || 'admin@knowledgepark.edu'}</span>
             </div>
           </div>
           <div className="flex items-center justify-between pt-2">

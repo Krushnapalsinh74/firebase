@@ -284,7 +284,7 @@ export default function QuestionsPage() {
       doc.setFillColor(37, 99, 235);
       doc.rect(0, 0, pageW, 28, 'F');
       doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-      doc.text('Yunora Question Bank', margin, 13);
+      doc.text('Knowledge Park Question Bank', margin, 13);
       doc.setFontSize(9); doc.setFont('helvetica', 'normal');
       doc.text(`Exported ${format(new Date(), 'dd MMM yyyy, HH:mm')}  •  ${questions.length} question${questions.length !== 1 ? 's' : ''}${debouncedSearch ? `  •  Filter: "${debouncedSearch}"` : ''}`, margin, 22);
       y = 36;
@@ -337,10 +337,10 @@ export default function QuestionsPage() {
       for (let p = 1; p <= totalPages; p++) {
         doc.setPage(p); doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(160, 160, 160);
         doc.text(`Page ${p} of ${totalPages}`, pageW - margin, pageH - 8, { align: 'right' });
-        doc.text('Yunora AI', margin, pageH - 8);
+        doc.text('Knowledge Park', margin, pageH - 8);
       }
 
-      const filename = `yunora-questions-${format(new Date(), 'yyyyMMdd-HHmm')}${debouncedSearch ? `-${debouncedSearch.replace(/\s+/g, '_')}` : ''}.pdf`;
+      const filename = `kp-questions-${format(new Date(), 'yyyyMMdd-HHmm')}${debouncedSearch ? `-${debouncedSearch.replace(/\s+/g, '_')}` : ''}.pdf`;
       doc.save(filename);
       toast({ title: `Exported ${questions.length} questions`, description: filename });
     } catch (err) {
