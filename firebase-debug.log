@@ -1,0 +1,21 @@
+[debug] [2026-07-31T10:55:50.698Z] ----------------------------------------------------------------------
+[debug] [2026-07-31T10:55:50.703Z] Command:       C:\nodejs\node.exe C:\nodejs\node_modules\firebase-tools\lib\bin\firebase.js deploy --only functions
+[debug] [2026-07-31T10:55:50.704Z] CLI Version:   15.22.2
+[debug] [2026-07-31T10:55:50.704Z] Platform:      win32
+[debug] [2026-07-31T10:55:50.704Z] Node Version:  v24.14.1
+[debug] [2026-07-31T10:55:50.704Z] Detected Agent: antigravity
+[debug] [2026-07-31T10:55:50.704Z] Time:          Fri Jul 31 2026 16:25:50 GMT+0530 (India Standard Time)
+[debug] [2026-07-31T10:55:50.705Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-07-31T10:56:03.868Z] Object "/functions" in "firebase.json" has unknown property: {"additionalProperty":"environmentVariables"}
+[debug] [2026-07-31T10:56:03.869Z] Object "/functions" in "firebase.json" is missing required property: {"missingProperty":"remoteSource"}
+[debug] [2026-07-31T10:56:03.869Z] Field "/functions" in "firebase.json" is possibly invalid: must be array
+[debug] [2026-07-31T10:56:03.869Z] Field "/functions" in "firebase.json" is possibly invalid: must match a schema in anyOf
+[debug] [2026-07-31T10:56:03.884Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-07-31T10:56:03.914Z] > authorizing via signed-in user (dalalifree.com@gmail.com)
+[debug] [2026-07-31T10:56:03.915Z] [iam] checking project kpark-edu for permissions ["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]
+[debug] [2026-07-31T10:56:03.921Z] Checked if tokens are valid: true, expires at: 1785496888971
+[debug] [2026-07-31T10:56:03.946Z] Checked if tokens are valid: true, expires at: 1785496888971
+[debug] [2026-07-31T10:56:03.952Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/kpark-edu:testIamPermissions [none]
+[debug] [2026-07-31T10:56:03.952Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/kpark-edu:testIamPermissions  x-goog-user-project=kpark-edu
+[debug] [2026-07-31T10:56:03.952Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/kpark-edu:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}

@@ -30,7 +30,7 @@ async function getRazorpaySecret() {
   return data?.razorpayKeySecret || null;
 }
 
-router.post("/order", requireAuth, async (req, res) => {
+router.post("/payments/order", requireAuth, async (req, res) => {
   try {
     const { planId } = req.body;
     // req.user is populated by requireAuth, but we don't have types here for it unless we cast
@@ -89,7 +89,7 @@ router.post("/order", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/verify", requireAuth, async (req, res) => {
+router.post("/payments/verify", requireAuth, async (req, res) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
     const secret = await getRazorpaySecret();

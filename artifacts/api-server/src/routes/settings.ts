@@ -4,7 +4,7 @@ import { firestore, docToObj } from "@workspace/db";
 
 const router = Router();
 
-router.get("/payment", requireAuth, async (req, res) => {
+router.get("/settings/payment", requireAuth, async (req, res) => {
   try {
     const docSnap = await firestore.collection("settings").doc("payment").get();
     if (!docSnap.exists) {
@@ -29,7 +29,7 @@ router.get("/payment", requireAuth, async (req, res) => {
   }
 });
 
-router.put("/payment", requireAuth, async (req, res) => {
+router.put("/settings/payment", requireAuth, async (req, res) => {
   try {
     const { razorpayKeyId, razorpayKeySecret } = req.body;
     

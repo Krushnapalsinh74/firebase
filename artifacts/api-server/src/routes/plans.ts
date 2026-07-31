@@ -4,7 +4,7 @@ import { requireAuth } from "../lib/auth.js";
 
 const router = Router();
 
-router.get("/", requireAuth, async (req, res) => {
+router.get("/plans", requireAuth, async (req, res) => {
   try {
     const snap = await firestore.collection("plans").orderBy("name").get();
     const plans = snapshotToArr(snap);
@@ -15,7 +15,7 @@ router.get("/", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/", requireAuth, async (req, res) => {
+router.post("/plans", requireAuth, async (req, res) => {
   try {
     const id = await nextId("plans");
     const now = nowTs();
@@ -42,7 +42,7 @@ router.post("/", requireAuth, async (req, res) => {
   }
 });
 
-router.get("/:id", requireAuth, async (req, res) => {
+router.get("/plans/:id", requireAuth, async (req, res) => {
   try {
     const id = parseInt(req.params["id"] as string);
     const doc = await firestore.collection("plans").doc(String(id)).get();
@@ -55,7 +55,7 @@ router.get("/:id", requireAuth, async (req, res) => {
   }
 });
 
-router.patch("/:id", requireAuth, async (req, res) => {
+router.patch("/plans/:id", requireAuth, async (req, res) => {
   try {
     const id = parseInt(req.params["id"] as string);
     
@@ -84,7 +84,7 @@ router.patch("/:id", requireAuth, async (req, res) => {
   }
 });
 
-router.delete("/:id", requireAuth, async (req, res) => {
+router.delete("/plans/:id", requireAuth, async (req, res) => {
   try {
     const id = parseInt(req.params["id"] as string);
     await firestore.collection("plans").doc(String(id)).delete();

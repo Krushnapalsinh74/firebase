@@ -6,11 +6,13 @@ import jwt from "jsonwebtoken";
 
 const router = Router();
 
-router.get("/", requireAuth, async (req, res) => {
+router.get("/students", requireAuth, async (req, res) => {
   try {
-    // Get all users who are not admins (or specifically 'viewer'/'student')
-    const usersSnap = await firestore.collection("users").where("role", "in", ["viewer", "student"]).get();
-    let students = snapshotToArr(usersSnap) as any[];
+    // Get ALL users except admins so all mobile app users are visible
+    const usersSnap = await firestore.collection("users").get();
+    let allUsers = snapshotToArr(usersSnap) as any[];
+    // Exclude admin accounts
+    let students = allUsers.filter(u => u.role !== "admin");
 
     // Fetch user_plans and plans to enrich data
     const userPlansSnap = await firestore.collection("user_plans").get();
@@ -35,10 +37,10 @@ router.get("/", requireAuth, async (req, res) => {
       return {
         id: student.id,
         email: student.email,
-        name: student.name,
-        role: student.role,
-        isActive: student.isActive,
-        createdAt: student.createdAt?.toDate?.()?.toISOString() || student.createdAt,
+        name: student.name || student.email,
+        role: student.role || 'student',
+        isActive: student.isActive ?? true,
+        createdAt: student.createdAt?.toDate?.()?.toISOString() || new Date(student.createdAt || Date.now()).toISOString(),
         planId,
         planName,
         questionsUsed,

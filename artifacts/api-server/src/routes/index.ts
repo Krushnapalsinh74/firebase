@@ -41,10 +41,10 @@ router.use(translateRouter);
 router.use(exportRouter);
 router.use(chatRouter);
 router.use(publicRouter);
-router.use("/plans", plansRouter);
-router.use("/payments", paymentsRouter);
-router.use("/students", studentsRouter);
+router.use(plansRouter);
+router.use(paymentsRouter);
+router.use(studentsRouter);
 router.use(usersRouter);
-router.use("/settings", settingsRouter);
+router.use(settingsRouter);
 
 export default router;
