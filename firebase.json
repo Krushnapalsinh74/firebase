@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "kpark-edu",
     "public": "artifacts/yunora-admin/dist/public",
     "ignore": [
       "firebase.json",

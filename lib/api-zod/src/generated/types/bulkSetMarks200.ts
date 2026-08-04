@@ -6,9 +6,6 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ListTopicsParams = {
-chapterId?: number;
-search?: string;
-page?: number;
-limit?: number;
+export type BulkSetMarks200 = {
+  updated?: number;
 };

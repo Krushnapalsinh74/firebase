@@ -701,6 +701,29 @@ paths:
         "204":
           description: Deleted
 
+  /questions/bulk-marks:
+    patch:
+      operationId: bulkSetMarks
+      tags: [questions]
+      summary: Bulk assign marks to multiple questions
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkMarksUpdate"
+      responses:
+        "200":
+          description: Number of questions updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated: { type: integer }
+
   # ── AI GENERATION ─────────────────────────────────────────────────────────────
   /generation/start:
     post:
@@ -1517,6 +1540,7 @@ components:
         options: { type: ["string", "null"] }
         explanation: { type: string }
         qualityScore: { type: number }
+        marks: { type: ["integer", "null"], description: "Optional marks assigned to this question" }
         estimatedSolveTime: { type: integer }
         learningObjective: { type: ["string", "null"] }
         topicId: { type: ["integer", "null"] }
@@ -1543,6 +1567,20 @@ components:
         difficulty: { type: string, enum: [easy, medium, hard, advanced] }
         difficultyScore: { type: integer }
         learningObjective: { type: string }
+        marks: { type: integer, description: "Optional marks for this question" }
+
+    BulkMarksUpdate:
+      type: object
+      required: [ids, marks]
+      properties:
+        ids:
+          type: array
+          items: { type: integer }
+          description: "Question IDs to update"
+        marks:
+          type: integer
+          nullable: true
+          description: "Marks to assign (null to clear marks)"
 
     QuestionList:
       type: object
@@ -1571,6 +1609,7 @@ components:
         count: { type: integer, minimum: 1, maximum: 50 }
         providerId: { type: integer }
         model: { type: string }
+        marks: { type: integer, description: "Optional marks to assign to each generated question" }
 
     GenerationJob:
       type: object

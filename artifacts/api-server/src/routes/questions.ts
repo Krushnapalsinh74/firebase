@@ -122,7 +122,7 @@ router.get("/questions/:id", requireAuth, async (req, res) => {
 router.patch("/questions/:id", requireAuth, async (req, res) => {
   try {
     const id = parseInt(req.params["id"] as string);
-    const { question, correctAnswer, options, explanation, difficulty, difficultyScore, learningObjective } = req.body;
+    const { question, correctAnswer, options, explanation, difficulty, difficultyScore, learningObjective, marks } = req.body;
     const ref = firestore.collection("questions").doc(String(id));
     if (!(await ref.get()).exists) { res.status(404).json({ error: "Question not found" }); return; }
     const updates: Record<string, unknown> = { updatedAt: nowTs() };
@@ -133,11 +133,42 @@ router.patch("/questions/:id", requireAuth, async (req, res) => {
     if (difficulty !== undefined)        updates["difficulty"]        = difficulty;
     if (difficultyScore !== undefined)   updates["difficultyScore"]   = difficultyScore;
     if (learningObjective !== undefined) updates["learningObjective"] = learningObjective;
+    if (marks !== undefined)             updates["marks"]             = marks === null ? null : Number(marks);
     await ref.update(updates);
     const q = docToObj(await ref.get())!;
     res.json(await enrichQuestion(q));
   } catch (err) {
     req.log.error({ err }, "Update question error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── Bulk Marks ──────────────────────────────────────────────────────────────
+router.patch("/questions/bulk-marks", requireAuth, async (req, res) => {
+  try {
+    const { ids, marks } = req.body as { ids: number[]; marks: number | null };
+    if (!Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({ error: "ids must be a non-empty array" });
+      return;
+    }
+    const marksValue = marks === null || marks === undefined ? null : Number(marks);
+    const updatedAt = nowTs();
+    // Firestore batch limit is 500 per commit
+    const BATCH_SIZE = 500;
+    let updated = 0;
+    for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+      const batch = firestore.batch();
+      const chunk = ids.slice(i, i + BATCH_SIZE);
+      for (const id of chunk) {
+        const ref = firestore.collection("questions").doc(String(id));
+        batch.update(ref, { marks: marksValue, updatedAt });
+        updated++;
+      }
+      await batch.commit();
+    }
+    res.json({ updated });
+  } catch (err) {
+    req.log.error({ err }, "Bulk marks update error");
     res.status(500).json({ error: "Internal server error" });
   }
 });

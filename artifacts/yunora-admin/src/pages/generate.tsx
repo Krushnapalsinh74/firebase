@@ -101,6 +101,8 @@ export default function GeneratePage() {
 
   // Multi-difficulty state: selected difficulties with per-level counts
   const [diffCounts, setDiffCounts] = useState<Partial<Record<DifficultyValue, number>>>({ medium: 5 });
+  // Optional marks per difficulty (undefined = no marks set)
+  const [marksCounts, setMarksCounts] = useState<Partial<Record<DifficultyValue, number>>>({});
 
   const toggleDifficulty = (val: DifficultyValue) => {
     setDiffCounts(prev => {
@@ -116,6 +118,14 @@ export default function GeneratePage() {
 
   const setCount = (val: DifficultyValue, n: number) => {
     setDiffCounts(prev => ({ ...prev, [val]: Math.max(1, Math.min(50, n)) }));
+  };
+
+  const setMarks = (val: DifficultyValue, n: number) => {
+    setMarksCounts(prev => ({ ...prev, [val]: Math.max(0, n) }));
+  };
+
+  const clearMarks = (val: DifficultyValue) => {
+    setMarksCounts(prev => { const next = { ...prev }; delete next[val]; return next; });
   };
 
   const selectedDifficulties = Object.keys(diffCounts) as DifficultyValue[];
@@ -138,6 +148,7 @@ export default function GeneratePage() {
 
     for (const difficulty of runDifficulties) {
       const count = diffCounts[difficulty] ?? 5;
+      const marks = marksCounts[difficulty];
       try {
         const payload = {
           ...data,
@@ -147,7 +158,8 @@ export default function GeneratePage() {
           chapterId: data.chapterId ? Number(data.chapterId) : undefined,
           topicId: data.topicId ? Number(data.topicId) : undefined,
           difficulty,
-          count
+          count,
+          ...(marks !== undefined ? { marks } : {}),
         };
         const res = await generateMutation.mutateAsync({ data: payload as any });
         jobIds.push(res.jobId);
@@ -455,19 +467,37 @@ export default function GeneratePage() {
 
                             {isSelected && (
                               <div
-                                className="mt-3 flex items-center gap-2"
+                                className="mt-3 space-y-2"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <label className="text-xs text-muted-foreground whitespace-nowrap">Questions:</label>
-                                <Input
-                                  type="number"
-                                  min={1}
-                                  max={50}
-                                  value={diffCounts[lvl.value] ?? 5}
-                                  onChange={(e) => setCount(lvl.value, parseInt(e.target.value) || 1)}
-                                  className="w-20 h-7 text-sm"
-                                />
-                                <span className="text-xs text-muted-foreground">(max 50)</span>
+                                <div className="flex items-center gap-2">
+                                  <label className="text-xs text-muted-foreground whitespace-nowrap">Questions:</label>
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    max={50}
+                                    value={diffCounts[lvl.value] ?? 5}
+                                    onChange={(e) => setCount(lvl.value, parseInt(e.target.value) || 1)}
+                                    className="w-20 h-7 text-sm"
+                                  />
+                                  <span className="text-xs text-muted-foreground">(max 50)</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <label className="text-xs text-muted-foreground whitespace-nowrap">Marks:</label>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    placeholder="optional"
+                                    value={marksCounts[lvl.value] ?? ''}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      if (v === '') clearMarks(lvl.value);
+                                      else setMarks(lvl.value, parseInt(v) || 0);
+                                    }}
+                                    className="w-24 h-7 text-sm"
+                                  />
+                                  <span className="text-xs text-muted-foreground">(optional)</span>
+                                </div>
                               </div>
                             )}
                           </div>

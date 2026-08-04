@@ -6,8 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface StandardUpdate {
-  name?: string;
-  level?: number;
-  isActive?: boolean;
+export interface BulkMarksUpdate {
+  /** Question IDs to update */
+  ids: number[];
+  /** Marks to assign (null to clear marks) */
+  marks: number | null;
 }

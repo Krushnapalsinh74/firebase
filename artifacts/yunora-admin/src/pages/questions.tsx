@@ -19,7 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Search, Trash2, FileDown, X, CheckSquare, Square, ChevronDown, Globe } from 'lucide-react';
+import { Search, Trash2, FileDown, X, CheckSquare, Square, ChevronDown, Globe, Star } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format, parseISO } from 'date-fns';
 import { MathText } from '@/lib/math-text';
@@ -89,6 +89,9 @@ export default function QuestionsPage() {
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkMarksOpen, setBulkMarksOpen] = useState(false);
+  const [bulkMarksInput, setBulkMarksInput] = useState('');
+  const [bulkMarksUpdating, setBulkMarksUpdating] = useState(false);
   const token = useAuthStore((s) => s.token);
 
   // ── Advanced Cascading Filter State ──
@@ -199,6 +202,33 @@ export default function QuestionsPage() {
           queryClient.invalidateQueries({ queryKey: ['analytics'] });
         },
       });
+    }
+  };
+
+  const handleBulkSetMarks = async () => {
+    if (selectedIds.size === 0) return;
+    const marksVal = bulkMarksInput === '' ? null : parseInt(bulkMarksInput);
+    if (bulkMarksInput !== '' && (isNaN(marksVal as number) || (marksVal as number) < 0)) {
+      toast({ title: 'Enter a valid marks value (0 or above)', variant: 'destructive' });
+      return;
+    }
+    setBulkMarksUpdating(true);
+    try {
+      const res = await fetch('/api/questions/bulk-marks', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ids: Array.from(selectedIds), marks: marksVal }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      const { updated } = await res.json();
+      toast({ title: `Marks updated for ${updated} question${updated !== 1 ? 's' : ''}` });
+      queryClient.invalidateQueries({ queryKey: getListQuestionsQueryKey() });
+      setBulkMarksOpen(false);
+      setBulkMarksInput('');
+    } catch {
+      toast({ title: 'Failed to update marks', variant: 'destructive' });
+    } finally {
+      setBulkMarksUpdating(false);
     }
   };
 
@@ -380,6 +410,40 @@ export default function QuestionsPage() {
               <Button variant="outline" size="sm" onClick={clearSelection}>
                 <X className="h-4 w-4 mr-1" /> Deselect
               </Button>
+              {/* ── Set Marks popover ── */}
+              <div className="relative">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setBulkMarksOpen(o => !o); setBulkMarksInput(''); }}
+                >
+                  <Star className="h-4 w-4 mr-2" /> Set Marks
+                </Button>
+                {bulkMarksOpen && (
+                  <div className="absolute right-0 top-full mt-2 z-50 bg-popover border border-border rounded-lg shadow-lg p-4 w-64">
+                    <p className="text-sm font-medium mb-2">Marks for {selectedIds.size} question{selectedIds.size !== 1 ? 's' : ''}</p>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Input
+                        type="number"
+                        min={0}
+                        placeholder="e.g. 2"
+                        value={bulkMarksInput}
+                        onChange={e => setBulkMarksInput(e.target.value)}
+                        className="h-8 text-sm"
+                        autoFocus
+                        onKeyDown={e => e.key === 'Enter' && handleBulkSetMarks()}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-3">Leave blank to clear marks.</p>
+                    <div className="flex gap-2">
+                      <Button size="sm" className="flex-1" onClick={handleBulkSetMarks} disabled={bulkMarksUpdating}>
+                        {bulkMarksUpdating ? 'Saving…' : 'Apply'}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setBulkMarksOpen(false)}>Cancel</Button>
+                    </div>
+                  </div>
+                )}
+              </div>
               <Button variant="destructive" size="sm" onClick={handleBulkDelete} disabled={bulkDeleting}>
                 <Trash2 className="h-4 w-4 mr-2" />
                 {bulkDeleting ? 'Deleting…' : `Delete ${selectedIds.size}`}
@@ -777,6 +841,11 @@ function QuestionList({ questions, selectedIds, onToggleSelect, onDelete }: Ques
                       {q.difficulty.toUpperCase()}
                     </Badge>
                     <Badge variant="outline">{q.questionType}</Badge>
+                    {q.marks != null && (
+                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 gap-1">
+                        <Star className="h-3 w-3" />{q.marks} mark{q.marks !== 1 ? 's' : ''}
+                      </Badge>
+                    )}
                     <span className="text-xs text-muted-foreground ml-auto whitespace-nowrap">
                       {q.subjectName} • {q.chapterName}
                     </span>

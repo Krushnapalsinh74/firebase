@@ -137,6 +137,7 @@ router.post("/generation/start", requireAuth, async (req, res) => {
               qualityScore:       r.qualityScore,
               estimatedSolveTime: r.estimatedSolveTime,
               learningObjective:  r.learningObjective,
+              marks:              params.marks != null ? Number(params.marks) : null,
               topicId:    topicIdNum,
               chapterId:  chapterIdNum,
               subjectId:  subjectIdNum,

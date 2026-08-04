@@ -54,6 +54,7 @@ export interface GenerationRequest {
   difficulty: string;
   jeeAdvancedOnly?: boolean;
   includeDiagrams?: 'no' | 'yes' | 'ai';
+  marks?: number | null;
 }
 
 const OFF_SYLLABUS_KEYWORDS = [
