@@ -42,7 +42,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "PORT=3000 BASE_PATH=/ API_PORT=8080 pnpm --filter @workspace/yunora-admin run dev"
+args = "PORT=3000 BASE_PATH=/ API_PORT=8080 pnpm --filter @workspace/kpark-admin run dev"
 waitForPort = 3000
 
 [workflows.workflow.metadata]

@@ -1,0 +1,701 @@
+import React, { useEffect, useState } from 'react';
+import { useLocation } from 'wouter';
+import { 
+  useListBoards, 
+  useListStandards, 
+  useListSubjects, 
+  useListChapters, 
+  useListTopics,
+  useListAiProviders,
+  useListQuestionTypes,
+  useStartGeneration,
+} from '@workspace/api-client-react';
+import { useForm, useWatch } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
+import { Sparkles, ImageIcon, ImageOff, Cpu, KeyRound, Eye, EyeOff, Layers } from 'lucide-react';
+
+const DIFFICULTY_LEVELS = [
+  { value: 'easy',     label: 'Easy',     description: 'Basic recall & understanding',         color: 'bg-green-100 text-green-800 border-green-200' },
+  { value: 'medium',   label: 'Medium',   description: 'Conceptual & application-based',        color: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
+  { value: 'hard',     label: 'Hard',     description: 'Deep reasoning & multi-step HOTS',      color: 'bg-orange-100 text-orange-800 border-orange-200' },
+  { value: 'advanced', label: 'Advanced', description: 'Very hard — olympiad / competitive level', color: 'bg-red-100 text-red-800 border-red-200' },
+] as const;
+
+type DifficultyValue = typeof DIFFICULTY_LEVELS[number]['value'];
+
+const baseSchema = z.object({
+  boardId: z.string().min(1, { message: "Required" }),
+  standardId: z.string().min(1, { message: "Required" }),
+  subjectId: z.string().min(1, { message: "Required" }),
+  chapterId: z.string().min(1, { message: "Required" }),
+  topicId: z.string().min(1, { message: "Required" }),
+  questionType: z.string().min(1, { message: "Required" }),
+  providerId: z.coerce.number().min(1, { message: "Required" }),
+  model: z.string().min(1, { message: "Required" }),
+  customInstructions: z.string().optional().default(''),
+  includeDiagrams: z.enum(['no', 'yes', 'ai', 'provider']).default('no'),
+  diagramProviderId: z.string().optional(),
+  diagramModel: z.string().optional(),
+});
+
+type BaseFormValues = z.infer<typeof baseSchema>;
+
+export default function GeneratePage() {
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+
+  const form = useForm<BaseFormValues>({
+    resolver: zodResolver(baseSchema),
+    defaultValues: {
+      boardId: '',
+      standardId: '',
+      subjectId: '',
+      chapterId: '',
+      topicId: '',
+      questionType: '',
+      providerId: undefined,
+      model: '',
+      customInstructions: '',
+      includeDiagrams: 'no',
+      diagramProviderId: undefined,
+      diagramModel: '',
+    },
+  });
+
+  const boardId = useWatch({ control: form.control, name: 'boardId' });
+  const standardId = useWatch({ control: form.control, name: 'standardId' });
+  const subjectId = useWatch({ control: form.control, name: 'subjectId' });
+  const chapterId = useWatch({ control: form.control, name: 'chapterId' });
+  const topicId = useWatch({ control: form.control, name: 'topicId' });
+  const customInstructions = useWatch({ control: form.control, name: 'customInstructions' });
+  const includeDiagrams = useWatch({ control: form.control, name: 'includeDiagrams' });
+  const diagramProviderId = useWatch({ control: form.control, name: 'diagramProviderId' });
+  const diagramModel = useWatch({ control: form.control, name: 'diagramModel' });
+  const providerId = useWatch({ control: form.control, name: 'providerId' });
+
+  const { data: boards } = useListBoards();
+  const { data: standards } = useListStandards({ boardId: boardId ? Number(boardId) : undefined });
+  const { data: subjects } = useListSubjects({ standardId: standardId ? Number(standardId) : undefined });
+  const { data: chapters } = useListChapters({ subjectId: subjectId ? Number(subjectId) : undefined });
+  const { data: topics } = useListTopics({ chapterId: chapterId ? Number(chapterId) : undefined });
+  const { data: providers } = useListAiProviders();
+  const { data: questionTypes } = useListQuestionTypes();
+
+  const selectedSubject = subjects?.data.find((s) => String(s.id) === String(subjectId));
+  const selectedChapter = chapters?.data.find((c) => String(c.id) === String(chapterId));
+  const selectedTopic = topics?.data.find((t) => String(t.id) === String(topicId));
+  
+  const syllabusCategory = selectedChapter?.syllabus;
+  const jeeTrackDetected = syllabusCategory 
+    ? (syllabusCategory === 'JEE' || syllabusCategory === 'JEE Advanced')
+    : /\bphysics\b|\bchemistry\b|\bmathematics\b|\bjee\b|advanced|olympiad/i.test(
+        `${selectedSubject?.name ?? ''} ${selectedChapter?.name ?? ''} ${selectedTopic?.name ?? ''}`
+      );
+
+  const selectedProvider = providers?.find(p => p.id === Number(providerId));
+  const selectedDiagramProvider = providers?.find(p => String(p.id) === String(diagramProviderId));
+
+  // Auto-select first active provider for diagram generation if not set
+  useEffect(() => {
+    if (providers && providers.length > 0) {
+      if (!diagramProviderId) {
+        const defaultP = providers.find(p => p.isActive) || providers[0];
+        if (defaultP) {
+          form.setValue('diagramProviderId', String(defaultP.id));
+          form.setValue('diagramModel', defaultP.defaultModel || defaultP.availableModels?.[0] || '');
+        }
+      }
+    }
+  }, [providers, diagramProviderId]);
+
+  // When diagram provider changes, update model if not in its available models
+  useEffect(() => {
+    if (selectedDiagramProvider) {
+      const cur = form.getValues('diagramModel');
+      const models = selectedDiagramProvider.availableModels || [];
+      if (!cur || !models.includes(cur)) {
+        form.setValue('diagramModel', selectedDiagramProvider.defaultModel || models[0] || '');
+      }
+    }
+  }, [selectedDiagramProvider]);
+
+  const generateMutation = useStartGeneration();
+
+  // Multi-difficulty state: selected difficulties with per-level counts
+  const [diffCounts, setDiffCounts] = useState<Partial<Record<DifficultyValue, number>>>({ medium: 5 });
+  // Optional marks per difficulty (undefined = no marks set)
+  const [marksCounts, setMarksCounts] = useState<Partial<Record<DifficultyValue, number>>>({});
+
+  const toggleDifficulty = (val: DifficultyValue) => {
+    setDiffCounts(prev => {
+      const next = { ...prev };
+      if (next[val] !== undefined) {
+        delete next[val];
+      } else {
+        next[val] = 5;
+      }
+      return next;
+    });
+  };
+
+  const setCount = (val: DifficultyValue, n: number) => {
+    setDiffCounts(prev => ({ ...prev, [val]: Math.max(1, Math.min(50, n)) }));
+  };
+
+  const setMarks = (val: DifficultyValue, n: number) => {
+    setMarksCounts(prev => ({ ...prev, [val]: Math.max(0, n) }));
+  };
+
+  const clearMarks = (val: DifficultyValue) => {
+    setMarksCounts(prev => { const next = { ...prev }; delete next[val]; return next; });
+  };
+
+  const selectedDifficulties = Object.keys(diffCounts) as DifficultyValue[];
+  const activeDifficulties = selectedDifficulties;
+  const totalQuestions = activeDifficulties.reduce((sum, d) => sum + (diffCounts[d] ?? 0), 0);
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const onSubmit = async (data: BaseFormValues) => {
+    const runDifficulties = selectedDifficulties;
+
+    if (runDifficulties.length === 0) {
+      toast({ variant: 'destructive', title: 'Select at least one difficulty level' });
+      return;
+    }
+
+    setIsSubmitting(true);
+    const jobIds: string[] = [];
+    const errors: string[] = [];
+
+    for (const difficulty of runDifficulties) {
+      const count = diffCounts[difficulty] ?? 5;
+      const marks = marksCounts[difficulty];
+      try {
+        const payload = {
+          ...data,
+          boardId: data.boardId ? Number(data.boardId) : undefined,
+          standardId: data.standardId ? Number(data.standardId) : undefined,
+          subjectId: data.subjectId ? Number(data.subjectId) : undefined,
+          chapterId: data.chapterId ? Number(data.chapterId) : undefined,
+          topicId: data.topicId ? Number(data.topicId) : undefined,
+          difficulty,
+          count,
+          customInstructions: data.customInstructions?.trim() || undefined,
+          includeDiagrams: data.includeDiagrams,
+          diagramProviderId: data.includeDiagrams === 'provider' && data.diagramProviderId ? Number(data.diagramProviderId) : undefined,
+          diagramModel: data.includeDiagrams === 'provider' && data.diagramModel ? data.diagramModel : undefined,
+          ...(marks !== undefined ? { marks } : {}),
+        };
+        const res = await generateMutation.mutateAsync({ data: payload as any });
+        jobIds.push(res.jobId);
+      } catch (err) {
+        errors.push(`${difficulty}: ${(err as Error).message}`);
+      }
+    }
+
+    setIsSubmitting(false);
+
+    if (jobIds.length > 0) {
+      toast({
+        title: `${jobIds.length} Generation Job${jobIds.length > 1 ? 's' : ''} Started`,
+        description: `Generating ${totalQuestions} question${totalQuestions > 1 ? 's' : ''} across ${jobIds.length} difficulty level${jobIds.length > 1 ? 's' : ''}.`,
+      });
+      setLocation('/jobs');
+    }
+    if (errors.length > 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Some jobs failed to start',
+        description: errors.join('\n'),
+      });
+    }
+  };
+
+  return (
+    <div className="space-y-6 max-w-4xl mx-auto pb-10">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Generate Questions</h1>
+        <p className="text-muted-foreground">Configure AI parameters and generate new curriculum content.</p>
+      </div>
+
+      <Card>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            <CardHeader>
+              <CardTitle>Configuration Wizard</CardTitle>
+              <CardDescription>Select the target topic and generation parameters.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+
+              {/* Curriculum hierarchy */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="boardId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Board</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value?.toString() ?? ""}>
+                        <FormControl>
+                          <SelectTrigger><SelectValue placeholder="Select board" /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {boards?.data.map((b) => (
+                            <SelectItem key={b.id} value={b.id.toString()}>{b.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="standardId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Standard</FormLabel>
+                      <Select disabled={!boardId} onValueChange={field.onChange} value={field.value?.toString() ?? ""}>
+                        <FormControl>
+                          <SelectTrigger><SelectValue placeholder="Select standard" /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {standards?.data.map((s) => (
+                            <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="subjectId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Subject</FormLabel>
+                      <Select disabled={!standardId} onValueChange={field.onChange} value={field.value?.toString() ?? ""}>
+                        <FormControl>
+                          <SelectTrigger><SelectValue placeholder="Select subject" /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {subjects?.data.map((s) => (
+                            <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="chapterId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="flex items-center gap-2">
+                        <FormLabel>Chapter</FormLabel>
+                        {selectedChapter?.syllabus && (
+                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] font-semibold py-0.5 px-2">
+                            {selectedChapter.syllabus}
+                          </Badge>
+                        )}
+                      </div>
+                      <Select disabled={!subjectId} onValueChange={field.onChange} value={field.value?.toString() ?? ""}>
+                        <FormControl>
+                          <SelectTrigger><SelectValue placeholder="Select chapter" /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {chapters?.data.map((c) => (
+                            <SelectItem key={c.id} value={c.id.toString()}>
+                              {c.name} {c.syllabus ? `(${c.syllabus})` : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="topicId"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>Topic</FormLabel>
+                      <Select disabled={!chapterId} onValueChange={field.onChange} value={field.value?.toString() ?? ""}>
+                        <FormControl>
+                          <SelectTrigger><SelectValue placeholder="Select topic" /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {topics?.data.map((t) => (
+                            <SelectItem key={t.id} value={t.id.toString()}>{t.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="h-px w-full bg-border" />
+
+              {/* Question type */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="questionType"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>Question Type</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                        <FormControl>
+                          <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {questionTypes?.map((q) => (
+                            <SelectItem key={q.id} value={q.slug}>{q.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="h-px w-full bg-border" />
+
+              {/* Custom AI Instructions */}
+              <div className="rounded-lg border p-4 bg-muted/20 space-y-2">
+                <FormField
+                  control={form.control}
+                  name="customInstructions"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="flex items-center justify-between">
+                        <FormLabel className="text-sm font-semibold">Custom AI Prompt / Instructions</FormLabel>
+                        <span className="text-xs text-muted-foreground font-normal">Optional</span>
+                      </div>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Type specific guidelines for the AI (e.g. 'Strict JEE Advanced 2024 style with multi-step vector decomposition and no decorative variables', 'Include real-world application', 'Olympiad difficulty with calculus derivation')..."
+                          className="min-h-[85px] resize-y text-sm bg-background mt-1.5"
+                          {...field}
+                        />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">
+                        Whatever you enter here will be directly fed into the AI's question generation prompt.
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+                {/* Diagram toggle */}
+              <FormField
+                control={form.control}
+                name="includeDiagrams"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="space-y-3">
+                      <div>
+                        <FormLabel className="text-sm font-medium">Diagram Mode</FormLabel>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Control diagram usage. <strong>Without</strong> = text only, <strong>Fast AI</strong> = free educational diagram engine, <strong>Provider API</strong> = generated using your own API key (e.g. OpenAI DALL-E 3 or Google Imagen 3).
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {([
+                          { value: 'no',       icon: <ImageOff className="h-4 w-4" />,  label: 'Without Diagrams' },
+                          { value: 'ai',       icon: <Sparkles className="h-4 w-4" />,  label: 'Fast AI Diagrams (Free)' },
+                          { value: 'provider', icon: <Cpu className="h-4 w-4" />,       label: 'Provider API (Own Key)' },
+                        ] as const).map((opt) => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => field.onChange(opt.value)}
+                            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg border-2 text-xs sm:text-sm font-medium transition-all ${
+                              field.value === opt.value
+                                ? 'border-primary bg-primary/5 text-primary shadow-xs'
+                                : 'border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/30'
+                            }`}
+                          >
+                            {opt.icon}
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Diagram Provider & Model Selection Dropdowns */}
+                      {field.value === 'provider' && (
+                        <div className="mt-3 rounded-lg border border-primary/20 bg-primary/[0.02] p-3.5 space-y-3">
+                          <div className="flex items-center justify-between pb-1 border-b border-border/60">
+                            <div className="flex items-center gap-2">
+                              <Cpu className="h-4 w-4 text-primary" />
+                              <label className="text-xs sm:text-sm font-semibold text-foreground">
+                                Diagram AI Provider & Model
+                              </label>
+                            </div>
+                            <Badge variant="outline" className="text-[10px] font-normal border-primary/30 text-primary">
+                              Added Providers
+                            </Badge>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-medium">Provider</label>
+                              <Select
+                                value={form.watch('diagramProviderId') || ''}
+                                onValueChange={(val) => {
+                                  form.setValue('diagramProviderId', val);
+                                  const p = providers?.find(x => String(x.id) === val);
+                                  if (p) {
+                                    form.setValue('diagramModel', p.defaultModel || p.availableModels?.[0] || '');
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="text-xs sm:text-sm bg-background">
+                                  <SelectValue placeholder="Select an added provider..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {providers?.map((p) => (
+                                    <SelectItem key={p.id} value={p.id.toString()}>
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-medium">{p.name}</span>
+                                        <span className="text-[10px] text-muted-foreground uppercase">({p.providerType})</span>
+                                        {p.isActive && (
+                                          <Badge variant="secondary" className="text-[9px] py-0 px-1 font-normal">Active</Badge>
+                                        )}
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-medium">Model</label>
+                              <Select
+                                disabled={!diagramProviderId}
+                                value={form.watch('diagramModel') || ''}
+                                onValueChange={(val) => form.setValue('diagramModel', val)}
+                              >
+                                <SelectTrigger className="text-xs sm:text-sm bg-background">
+                                  <SelectValue placeholder="Select model..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {selectedDiagramProvider?.availableModels?.map((m) => (
+                                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </FormItem>
+                )}
+              />
+
+              <div className="h-px w-full bg-border" />
+
+              {/* Multi-difficulty selection */}
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm font-medium leading-none">Difficulty Levels</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Select one or more levels. Each level starts its own generation job.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {DIFFICULTY_LEVELS.map((lvl) => {
+                    const isSelected = diffCounts[lvl.value] !== undefined;
+                    return (
+                      <div
+                        key={lvl.value}
+                        onClick={() => toggleDifficulty(lvl.value)}
+                        className={`rounded-lg border-2 p-4 transition-all select-none cursor-pointer ${
+                          isSelected
+                            ? 'border-primary bg-primary/5'
+                            : 'border-border hover:border-primary/40 hover:bg-muted/30'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div
+                            className={`mt-0.5 h-4 w-4 shrink-0 rounded-sm border flex items-center justify-center pointer-events-none ${
+                              isSelected
+                                ? 'border-primary bg-primary'
+                                : 'border-primary/60 bg-background'
+                            }`}
+                          >
+                            {isSelected && (
+                              <svg className="h-3 w-3 text-primary-foreground" fill="none" viewBox="0 0 12 12">
+                                <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium text-sm">{lvl.label}</span>
+                              <Badge variant="outline" className={`text-xs ${lvl.color}`}>
+                                {lvl.value === 'advanced' ? 'Very Hard' : lvl.label}
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">{lvl.description}</p>
+
+                            {isSelected && (
+                              <div
+                                className="mt-3 space-y-2"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <label className="text-xs text-muted-foreground whitespace-nowrap">Questions:</label>
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    max={50}
+                                    value={diffCounts[lvl.value] ?? 5}
+                                    onChange={(e) => setCount(lvl.value, parseInt(e.target.value) || 1)}
+                                    className="w-20 h-7 text-sm"
+                                  />
+                                  <span className="text-xs text-muted-foreground">(max 50)</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <label className="text-xs text-muted-foreground whitespace-nowrap">Marks:</label>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    placeholder="optional"
+                                    value={marksCounts[lvl.value] ?? ''}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      if (v === '') clearMarks(lvl.value);
+                                      else setMarks(lvl.value, parseInt(v) || 0);
+                                    }}
+                                    className="w-24 h-7 text-sm"
+                                  />
+                                  <span className="text-xs text-muted-foreground">(optional)</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {activeDifficulties.length > 0 && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground pt-1">
+                    <Sparkles className="h-3.5 w-3.5 text-primary" />
+                    <span>
+                      Will generate <strong className="text-foreground">{totalQuestions} questions</strong> across{' '}
+                      <strong className="text-foreground">{activeDifficulties.length}</strong> job{activeDifficulties.length > 1 ? 's' : ''}
+                      {' '}({activeDifficulties.map(d => DIFFICULTY_LEVELS.find(l => l.value === d)?.label).join(', ')})
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="h-px w-full bg-border" />
+
+              {/* AI Provider */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="providerId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>AI Provider</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value?.toString() ?? ""}>
+                        <FormControl>
+                          <SelectTrigger><SelectValue placeholder="Select provider" /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {providers?.map((p) => (
+                            <SelectItem key={p.id} value={p.id.toString()}>{p.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="model"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Model</FormLabel>
+                      <Select disabled={!providerId} onValueChange={field.onChange} value={field.value ?? ""}>
+                        <FormControl>
+                          <SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {selectedProvider?.availableModels?.map((m) => (
+                            <SelectItem key={m} value={m}>{m}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {(selectedProvider?.providerType === "local_stealth" || selectedProvider?.name?.toLowerCase().includes("browser")) && (
+                <div className="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-lg text-xs">
+                  <Sparkles className="h-4 w-4 shrink-0" />
+                  <span>
+                    <strong>Free Server Browser Mode:</strong> Prompts are processed directly through the server's open browser session for <strong>{form.watch("model") || "Gemini / ChatGPT"}</strong>. No paid API key or billing required!
+                  </span>
+                </div>
+              )}
+            </CardContent>
+
+            <CardFooter className="bg-muted/50 border-t px-6 py-4 flex items-center gap-4">
+              <Button
+                type="submit"
+                disabled={isSubmitting || activeDifficulties.length === 0}
+                className="w-full md:w-auto"
+              >
+                {isSubmitting ? 'Starting Jobs…' : (
+                  <><Sparkles className="mr-2 h-4 w-4" />
+                    Start Generation
+                    {activeDifficulties.length > 1 ? ` (${activeDifficulties.length} Jobs)` : ''}
+                  </>
+                )}
+              </Button>
+              {activeDifficulties.length === 0 && (
+                <p className="text-xs text-muted-foreground">Select at least one difficulty level above.</p>
+              )}
+            </CardFooter>
+          </form>
+        </Form>
+      </Card>
+    </div>
+  );
+}

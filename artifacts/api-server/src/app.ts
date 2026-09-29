@@ -34,7 +34,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api", router);
 
 // Serve the built frontend in production
-const frontendDist = path.resolve(process.cwd(), "../yunora-admin/dist/public");
+const frontendDist = path.resolve(process.cwd(), "../kpark-admin/dist/public");
 if (existsSync(frontendDist)) {
   app.use(express.static(frontendDist));
   // Fall through to index.html for SPA client-side routing

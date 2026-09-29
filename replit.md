@@ -4,7 +4,7 @@ An AI-powered educational assessment admin panel for managing curriculum, standa
 
 ## Stack
 
-- **Frontend**: React + Vite + Tailwind CSS + shadcn/ui (`artifacts/yunora-admin`)
+- **Frontend**: React + Vite + Tailwind CSS + shadcn/ui (`artifacts/kpark-admin`)
 - **Backend**: Express.js API server (`artifacts/api-server`)
 - **Database**: Firebase Firestore (via `lib/db`)
 - **Auth**: JWT + Firebase Auth
@@ -17,7 +17,7 @@ Both services start automatically via the configured workflows:
 
 | Service | Workflow | Port |
 |---------|----------|------|
-| Frontend | `artifacts/yunora-admin: web` | 25736 |
+| Frontend | `artifacts/kpark-admin: web` | 25736 |
 | API server | `artifacts/api-server: API Server` | 8080 |
 
 ## Firebase / Firestore

@@ -9,7 +9,7 @@ echo [1/2] Launching API Server in a new window...
 start "Yunora API Server" cmd /k "echo Starting API Server... && pnpm --filter @workspace/api-server dev"
 
 echo [2/2] Launching Admin Frontend (Vite) in a new window...
-start "Yunora Admin Frontend" cmd /k "echo Starting Frontend... && pnpm --filter @workspace/yunora-admin dev"
+start "Yunora Admin Frontend" cmd /k "echo Starting Frontend... && pnpm --filter @workspace/kpark-admin dev"
 
 echo.
 echo ===================================================

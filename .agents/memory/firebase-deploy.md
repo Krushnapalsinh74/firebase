@@ -22,7 +22,7 @@ functions predeploy:
   echo 'FIRESTORE_DATABASE_ID=kp73' > artifacts/api-server/dist/.env
 
 hosting predeploy:
-  pnpm --filter @workspace/yunora-admin run build
+  pnpm --filter @workspace/kpark-admin run build
 ```
 
 **Why firebase-admin is pre-installed:** build.mjs externalizes `firebase-admin` and

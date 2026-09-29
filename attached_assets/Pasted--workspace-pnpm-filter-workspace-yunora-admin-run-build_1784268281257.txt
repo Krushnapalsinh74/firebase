@@ -1,6 +1,6 @@
-/workspace$ pnpm --filter @workspace/yunora-admin run build && pnpm --filter @workspace/api-server run build
+/workspace$ pnpm --filter @workspace/kpark-admin run build && pnpm --filter @workspace/api-server run build
 
-> @workspace/yunora-admin@0.0.0 build /home/runner/workspace/artifacts/yunora-admin
+> @workspace/kpark-admin@0.0.0 build /home/runner/workspace/artifacts/kpark-admin
 > vite build --config vite.config.ts
 
 vite v7.3.3 building client environment for production...

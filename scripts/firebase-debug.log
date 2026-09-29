@@ -38,7 +38,7 @@
 [debug] [2026-07-16T08:34:04.491Z] <<< [apiv2][status] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/kpark-edu/versions 200
 [debug] [2026-07-16T08:34:04.492Z] <<< [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/kpark-edu/versions {"name":"projects/1027948040827/sites/kpark-edu/versions/d7c9d96c8c53b3ae","status":"CREATED","config":{},"labels":{"deployment-tool":"cli-firebase"}}
 [info] i  hosting[kpark-edu]: beginning deploy... 
-[info] i  hosting[kpark-edu]: found 68 files in artifacts/yunora-admin/dist/public 
+[info] i  hosting[kpark-edu]: found 68 files in artifacts/kpark-admin/dist/public 
 [debug] [2026-07-16T08:34:04.527Z] [hosting] uploading with 200 concurrency
 [debug] [2026-07-16T08:34:04.529Z] [hosting] hash cache [YXJ0aWZhY3RzXHl1bm9yYS1hZG1pblxkaXN0XHB1YmxpYw] not populated
 [debug] [2026-07-16T08:34:04.833Z] Checked if tokens are valid: true, expires at: 1784193952200
@@ -89,7 +89,7 @@
 [debug] [2026-07-16T08:34:08.005Z] [
   {
     "config": {
-      "public": "artifacts/yunora-admin/dist/public",
+      "public": "artifacts/kpark-admin/dist/public",
       "ignore": [
         "firebase.json",
         "**/.*",

@@ -5,7 +5,15 @@
  * Yunora AI Question Generation Admin Panel API
  * OpenAPI spec version: 0.1.0
  */
-import * as zod from 'zod';
+import * as _zod from 'zod';
+
+// Compatibility shims for Zod v3
+const zod: any = {
+  ..._zod,
+  ...(_zod as any).z,
+  email: () => _zod.string().email(),
+  int: () => _zod.number().int(),
+};
 
 
 /**

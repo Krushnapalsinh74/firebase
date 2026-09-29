@@ -30,6 +30,8 @@ router.post("/plans", requireAuth, async (req, res) => {
       standardId: req.body.standardId ?? null, 
       subjectId: req.body.subjectId ?? null, 
       chapterId: req.body.chapterId ?? null, 
+      promoCode: req.body.promoCode ?? null,
+      discountPercent: req.body.discountPercent ?? null,
       isActive: req.body.isActive ?? true, 
       createdAt: now, 
       updatedAt: now 
@@ -74,6 +76,8 @@ router.patch("/plans/:id", requireAuth, async (req, res) => {
     if (req.body.subjectId !== undefined) updates.subjectId = req.body.subjectId;
     if (req.body.chapterId !== undefined) updates.chapterId = req.body.chapterId;
     if (req.body.isActive !== undefined) updates.isActive = req.body.isActive;
+    if (req.body.promoCode !== undefined) updates.promoCode = req.body.promoCode;
+    if (req.body.discountPercent !== undefined) updates.discountPercent = req.body.discountPercent;
     
     await ref.update(updates);
     const updated = docToObj(await ref.get())!;

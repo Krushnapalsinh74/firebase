@@ -94,6 +94,33 @@ router.post("/generation/start", requireAuth, async (req, res) => {
         await firestore.collection("generationJobs").doc(jobId).update({ status: "processing" });
 
         const token = simpleDecrypt(provider.encryptedToken);
+
+        let diagramToken = token;
+        let diagramProviderType = provider.providerType;
+        if (params.includeDiagrams === 'provider') {
+          if (params.diagramApiKey && params.diagramApiKey.trim()) {
+            diagramToken = params.diagramApiKey.trim();
+            diagramProviderType = params.diagramProviderType || 'openai';
+          } else if (params.diagramProviderId) {
+            try {
+              const diagProvDoc = await firestore.collection("aiProviders").doc(String(params.diagramProviderId)).get();
+              if (diagProvDoc.exists) {
+                const dpData = diagProvDoc.data() as any;
+                diagramToken = simpleDecrypt(dpData.encryptedToken);
+                diagramProviderType = dpData.providerType || 'openai';
+              }
+            } catch (dpErr) {
+              console.warn('[Generation] Failed to fetch diagram provider doc:', dpErr);
+            }
+          }
+        }
+
+        const resolvedParams: GenerationRequest = {
+          ...params,
+          diagramToken,
+          diagramProviderType,
+        };
+
         const ctx = {
           topicName:    topic?.name    ?? "Topic",
           chapterName:  chapter?.name  ?? "Chapter",
@@ -106,13 +133,14 @@ router.post("/generation/start", requireAuth, async (req, res) => {
         activeControllers.set(jobId, controller);
 
         const { results, agentLog, inputTokens, outputTokens } = await runJEEPipeline(
-          token, params.model, provider.providerType, params, ctx,
+          token, params.model, provider.providerType, resolvedParams, ctx,
           (currentLog) => {
             firestore.collection("generationJobs").doc(jobId)
               .update({ agentLogs: currentLog })
               .catch(() => {});
           },
           controller.signal,
+          provider.baseUrl,
         );
 
         const costPerInput  = (0.075 / 1_000_000) * 83;

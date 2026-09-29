@@ -9,6 +9,27 @@ import { rm } from "node:fs/promises";
 globalThis.require = createRequire(import.meta.url);
 
 const artifactDir = path.dirname(fileURLToPath(import.meta.url));
+const workspaceRoot = path.resolve(artifactDir, "..", "..");
+
+/** esbuild plugin to resolve @workspace/* packages to their source */
+function workspaceAliasPlugin() {
+  const aliases = {
+    "@workspace/db": path.join(workspaceRoot, "lib", "db", "src", "index.ts"),
+    "@workspace/api-zod": path.join(workspaceRoot, "lib", "api-zod", "src", "index.ts"),
+    "@workspace/api-client-react": path.join(workspaceRoot, "lib", "api-client-react", "src", "index.ts"),
+  };
+  return {
+    name: "workspace-alias",
+    setup(build) {
+      build.onResolve({ filter: /^@workspace\// }, (args) => {
+        const resolved = aliases[args.path];
+        if (resolved) return { path: resolved };
+        return null;
+      });
+    },
+  };
+}
+
 
 async function buildAll() {
   const distDir = path.resolve(artifactDir, "dist");
@@ -25,6 +46,9 @@ async function buildAll() {
     outdir: distDir,
     outExtension: { ".js": ".mjs" },
     logLevel: "info",
+    nodePaths: [
+      path.join(artifactDir, "node_modules"),
+    ],
     // Some packages may not be bundleable, so we externalize them, we can add more here as needed.
     // Some of the packages below may not be imported or installed, but we're adding them in case they are in the future.
     // Examples of unbundleable packages:
@@ -108,6 +132,7 @@ async function buildAll() {
     ],
     sourcemap: "linked",
     plugins: [
+      workspaceAliasPlugin(),
       // pino relies on workers to handle logging, instead of externalizing it we use a plugin to handle it
       esbuildPluginPino({ transports: ["pino-pretty"] })
     ],
@@ -145,13 +170,14 @@ async function writeFirebaseFiles() {
   // environment.
   const distPkg = {
     name: srcPkg.name,
-    version: srcPkg.version,
+    version: `${srcPkg.version || "1.0.0"}-${Date.now()}`,
     private: true,
     main: "lambda.mjs",
     dependencies: {
       "firebase-admin": srcPkg.dependencies["firebase-admin"],
       "@google-cloud/firestore": srcPkg.dependencies["@google-cloud/firestore"]
     },
+    buildTime: new Date().toISOString(),
   };
 
   const distDir = path.resolve(artifactDir, "dist");
@@ -175,7 +201,7 @@ endpoints:
     region:
       - asia-south1
     entryPoint: api
-    timeoutSeconds: 300
+    timeoutSeconds: 3600
     availableMemoryMb: 1024
     httpsTrigger: {}
 `

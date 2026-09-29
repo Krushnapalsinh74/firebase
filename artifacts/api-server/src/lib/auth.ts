@@ -40,12 +40,44 @@ export function simpleEncrypt(text: string): string {
 }
 
 export function simpleDecrypt(hex: string): string {
-  const key = JWT_SECRET.slice(0, 32).padEnd(32, "0");
-  const keyBuf = Buffer.from(key);
-  const encBuf = Buffer.from(hex, "hex");
-  const out = Buffer.alloc(encBuf.length);
-  for (let i = 0; i < encBuf.length; i++) {
-    out[i] = encBuf[i] ^ keyBuf[i % keyBuf.length];
+  if (!hex || typeof hex !== "string") return "";
+  const val = hex.trim();
+  if (!val) return "";
+
+  // If it's already a known plain API key format, return as-is
+  if (
+    val.startsWith("AIzaSy") ||
+    val.startsWith("sk-") ||
+    val.startsWith("gsk_") ||
+    val.startsWith("ghp_") ||
+    val.startsWith("github_pat_") ||
+    val.startsWith("xai-") ||
+    val.startsWith("nvapi-")
+  ) {
+    return val;
   }
-  return Buffer.from(out.toString(), "base64").toString("utf8");
+
+  // If it's not even a valid hex string, it is already plaintext
+  if (!/^[0-9a-fA-F]+$/.test(val) || val.length % 2 !== 0) {
+    return val;
+  }
+
+  try {
+    const key = JWT_SECRET.slice(0, 32).padEnd(32, "0");
+    const keyBuf = Buffer.from(key);
+    const encBuf = Buffer.from(val, "hex");
+    if (encBuf.length === 0) return val;
+    const out = Buffer.alloc(encBuf.length);
+    for (let i = 0; i < encBuf.length; i++) {
+      out[i] = encBuf[i] ^ keyBuf[i % keyBuf.length];
+    }
+    const b64Str = out.toString("ascii");
+    const dec = Buffer.from(b64Str, "base64").toString("utf8");
+    if (dec && /^[\x20-\x7E\s]+$/.test(dec) && dec.length >= 6) {
+      return dec;
+    }
+    return val;
+  } catch {
+    return val;
+  }
 }

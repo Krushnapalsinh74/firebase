@@ -45,11 +45,14 @@ export const api = onRequest(
   {
     cors: true,
     invoker: "public", // required for Firebase Hosting rewrites to reach Gen 2 Cloud Functions
-    timeoutSeconds: 300, // 5 minutes (important for long-running AI pipelines)
+    timeoutSeconds: 3600, // Maximum allowed timeout (1 hour / unlimited for Gen 2 Cloud Functions)
     memory: "1GiB",      // 1GB RAM (ensures fast generation and plenty of headroom)
     region: "asia-south1", // Cloud Build in asia-south1 works; us-central1 has a broken npm
   },
   async (req, res) => {
+    // Disable socket and response timeouts so long AI extractions are never dropped
+    req.socket?.setTimeout(0);
+    res.setTimeout(0);
     if (!seeded) {
       await seedPromise;
     }

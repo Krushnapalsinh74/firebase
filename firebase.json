@@ -1,19 +1,17 @@
 {
   "hosting": {
     "site": "kpark-edu",
-    "public": "artifacts/yunora-admin/dist/public",
+    "public": "artifacts/kpark-admin/dist/public",
     "ignore": [
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
     ],
-    "predeploy": [
-      "pnpm -C artifacts/yunora-admin run build"
-    ],
     "rewrites": [
       {
         "source": "/api/**",
-        "function": "api"
+        "function": "api",
+        "region": "asia-south1"
       },
       {
         "source": "**",
@@ -31,10 +29,6 @@
     ],
     "environmentVariables": {
       "FIRESTORE_DATABASE_ID": "kp73"
-    },
-    "predeploy": [
-      "pnpm -C artifacts/api-server run build",
-      "node predeploy.mjs"
-    ]
+    }
   }
 }

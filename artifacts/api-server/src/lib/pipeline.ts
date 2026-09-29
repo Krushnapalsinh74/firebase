@@ -1,5 +1,7 @@
 import { randomUUID } from "crypto";
 import { firestore, snapshotToArr } from "@workspace/db";
+import { callBrowserAI } from "./browserAi.js";
+import { simpleDecrypt } from "./auth.js";
 
 // ─── Shared Types & Constants ────────────────────────────────────────────────
 
@@ -53,7 +55,13 @@ export interface GenerationRequest {
   questionType: string;
   difficulty: string;
   jeeAdvancedOnly?: boolean;
-  includeDiagrams?: 'no' | 'yes' | 'ai';
+  customInstructions?: string;
+  includeDiagrams?: 'no' | 'yes' | 'ai' | 'provider';
+  diagramProviderId?: number | string;
+  diagramProviderType?: string;
+  diagramModel?: string;
+  diagramApiKey?: string;
+  diagramToken?: string;
   marks?: number | null;
 }
 
@@ -161,6 +169,11 @@ const OPENAI_COMPAT_ENDPOINTS: Record<string, string> = {
   groq:          "https://api.groq.com/openai/v1/chat/completions",
   gemini:        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
   azure_openai:  "https://models.inference.ai.azure.com/chat/completions",
+  cerebras:      "https://api.cerebras.ai/v1/chat/completions",
+  deepseek:      "https://api.deepseek.com/chat/completions",
+  mistral:       "https://api.mistral.ai/v1/chat/completions",
+  together:      "https://api.together.xyz/v1/chat/completions",
+  openrouter:    "https://openrouter.ai/api/v1/chat/completions",
 };
 
 export interface AICallResult {
@@ -175,25 +188,150 @@ export async function callAIWithTokens(
   systemPrompt: string, userPrompt: string,
   temperature = 0.9, maxTokens = 4096,
   jsonMode = true,
+  customBaseUrl?: string,
 ): Promise<AICallResult> {
-  if (providerType === "gemini") {
-    const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-    const geminiBody = {
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-      generationConfig: {
-        temperature: temperature,
-      }
-    };
+  const cleanToken = (token || "").trim().replace(/^["']|["']$/g, "");
+
+  if (providerType === "custom_local" || providerType === "local_stealth" || providerType === "browser_web") {
+    const rawBase = (customBaseUrl || "http://127.0.0.1:9222").trim().replace(/\/+$/, "");
     
-    const response = await fetch(geminiEndpoint, {
+    // Check if this endpoint is a Chrome DevTools / Browser DevTunnel
+    let isCdp = false;
+    try {
+      const cdpRes = await fetch(`${rawBase}/json`, { signal: AbortSignal.timeout(3000) });
+      if (cdpRes.ok) isCdp = true;
+    } catch {}
+
+    if (isCdp || providerType === "local_stealth" || providerType === "browser_web") {
+      const combinedPrompt = systemPrompt ? `${systemPrompt}\n\n${userPrompt}` : userPrompt;
+      try {
+        const { content: browserContent } = await callBrowserAI(model, combinedPrompt, undefined, isCdp ? rawBase : undefined);
+        return {
+          content: browserContent,
+          promptTokens: 0,
+          completionTokens: 0,
+          finishReason: "stop"
+        };
+      } catch (browserErr: any) {
+        console.warn(`[Browser AI] Browser execution unavailable: ${browserErr.message}. Attempting fallback to active API provider...`);
+        try {
+          const snap = await firestore.collection("aiProviders")
+            .where("isActive", "==", true)
+            .get();
+
+          const allActive = snapshotToArr(snap) as any[];
+          const fallbackProvider = allActive.find((p: any) => p.providerType !== "local_stealth" && p.providerType !== "browser_web" && p.providerType !== "custom_local" && (p.encryptedToken || p.apiKey));
+
+          if (fallbackProvider) {
+            const fallbackToken = simpleDecrypt(fallbackProvider.encryptedToken || fallbackProvider.apiKey);
+            const fallbackModel = fallbackProvider.defaultModel || "gemini-2.0-flash";
+            const fallbackType = fallbackProvider.providerType || "gemini";
+            console.log(`[Browser AI] Cloud environment detected. Successfully routed to fallback provider: ${fallbackProvider.name} (${fallbackType} / ${fallbackModel})`);
+            return callAIWithTokens(fallbackToken, fallbackModel, fallbackType, systemPrompt, userPrompt, temperature, maxTokens, jsonMode, fallbackProvider.baseUrl);
+          }
+        } catch (fallbackErr: any) {
+          console.error(`[Browser AI] Fallback failed: ${fallbackErr.message}`);
+        }
+        throw browserErr;
+      }
+    }
+
+    // Otherwise standard OpenAI / Ollama / LM Studio format
+    let endpoint = rawBase;
+    if (!endpoint.endsWith("/chat/completions")) {
+      if (endpoint.endsWith("/v1")) {
+        endpoint += "/chat/completions";
+      } else {
+        endpoint += "/v1/chat/completions";
+      }
+    }
+
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (cleanToken && cleanToken !== "browser_session" && cleanToken !== "local_no_auth") {
+      headers["Authorization"] = `Bearer ${cleanToken}`;
+    }
+
+    const body: any = {
+      model: model || "llama3",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature,
+      max_tokens: maxTokens,
+      ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+    };
+
+    const response = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": token },
-      body: JSON.stringify(geminiBody),
+      headers,
+      body: JSON.stringify(body),
     });
+
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`Local AI error (${endpoint}) ${response.status}: ${err.slice(0, 300)}`);
+    }
+
+    const data = await response.json() as any;
+    const content = data.choices?.[0]?.message?.content ?? data.response ?? "";
+    const pt = data.usage?.prompt_tokens ?? 0;
+    const ct = data.usage?.completion_tokens ?? 0;
+    const finishReason: string = data.choices?.[0]?.finish_reason ?? "stop";
+    return { content, promptTokens: pt, completionTokens: ct, finishReason };
+  }
+
+  if (!cleanToken && providerType !== "custom_local") {
+    throw new Error(`AI Provider has no API key or token configured. Please check AI Provider settings.`);
+  }
+
+  if (providerType === "gemini") {
+    let cleanModel = (model || "gemini-2.0-flash").replace(/^models\//, "").trim();
+    if (!cleanModel || cleanModel === "Gemini" || cleanModel === "gemini" || cleanModel === "Gemini Web" || cleanModel === "Gemini Flash") {
+      cleanModel = "gemini-2.0-flash";
+    }
+
+    const tryGeminiCall = async (modelToUse: string): Promise<Response> => {
+      const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${encodeURIComponent(cleanToken)}`;
+      const geminiBody: any = {
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        generationConfig: {
+          temperature: temperature,
+          maxOutputTokens: maxTokens,
+          ...(jsonMode ? { responseMimeType: "application/json" } : {}),
+        }
+      };
+      if (systemPrompt) {
+        geminiBody.systemInstruction = { parts: [{ text: systemPrompt }] };
+      }
+      return fetch(geminiEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": cleanToken },
+        body: JSON.stringify(geminiBody),
+      });
+    };
+
+    let response = await tryGeminiCall(cleanModel);
+
+    // If 429 rate limit or 503 overloaded on Gemini 2.0 Flash, try fallback to 1.5 Flash or retry after 2s
+    if (response.status === 429 || response.status === 503) {
+      console.warn(`[Gemini API] Rate limit (429/503) on ${cleanModel}. Attempting automatic backoff & fallback...`);
+      await new Promise(r => setTimeout(r, 2000));
+      
+      const fallbackModelName = cleanModel.includes("2.0") ? "gemini-1.5-flash" : "gemini-2.0-flash";
+      response = await tryGeminiCall(fallbackModelName);
+      
+      if (!response.ok && (response.status === 429 || response.status === 503)) {
+        await new Promise(r => setTimeout(r, 3000));
+        response = await tryGeminiCall("gemini-1.5-flash-8b");
+      }
+    }
     
     if (!response.ok) {
       const err = await response.text();
+      if (response.status === 429) {
+        throw new Error(`Gemini Free Tier Rate Limit (429): Google's free quota for this minute is temporarily full. Please wait 15-30 seconds and try again.`);
+      }
       throw new Error(`AI API error (gemini native) ${response.status}: ${err}`);
     }
     
@@ -205,12 +343,39 @@ export async function callAIWithTokens(
     finishReason = finishReason.toLowerCase();
     
     if (finishReason === "max_tokens" || finishReason === "length" || (ct > 0 && ct >= maxTokens * 0.95)) {
-      console.log("\\n===== TRUNCATED GEMINI NATIVE RESPONSE =====");
+      console.log("\n===== TRUNCATED GEMINI NATIVE RESPONSE =====");
       console.log(content);
-      console.log("============================================\\n");
-      // Do not throw here in debug mode so the outer pipeline can log the raw response to the UI
+      console.log("============================================\n");
     }
     
+    return { content, promptTokens: pt, completionTokens: ct, finishReason };
+  }
+
+  if (providerType === "anthropic") {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": cleanToken,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+        temperature,
+      }),
+    });
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`Anthropic API error ${response.status}: ${err}`);
+    }
+    const data: any = await response.json();
+    const content = data.content?.find((c: any) => c.type === "text")?.text || "";
+    const pt = data.usage?.input_tokens || 0;
+    const ct = data.usage?.output_tokens || 0;
+    const finishReason = data.stop_reason || "stop";
     return { content, promptTokens: pt, completionTokens: ct, finishReason };
   }
 
@@ -232,7 +397,7 @@ export async function callAIWithTokens(
 
   const response = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${cleanToken}` },
     body: JSON.stringify(body),
   });
 
@@ -307,51 +472,81 @@ export function extractJsonObject(text: string): string {
   return text.substring(startIndex);
 }
 
-function robustRepairJSON(raw: string): string {
-  let s = raw.replace(/\r?\n/g, ' ');
-  s = s.replace(/\\\\|\\"|\\u[0-9a-fA-F]{4}|\\/g, (match) => {
-    if (match === '\\') return '\\\\';
-    return match;
+export function repairJsonWithLatex(raw: string): string {
+  if (!raw || typeof raw !== "string") return "{}";
+
+  let clean = raw.replace(/^\uFEFF/, '').trim();
+  clean = clean.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+
+  // Find outermost JSON object or array
+  const firstBrace = clean.indexOf('{');
+  const firstBracket = clean.indexOf('[');
+  let startIdx = 0;
+  if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+    startIdx = firstBrace;
+    const lastBrace = clean.lastIndexOf('}');
+    if (lastBrace > startIdx) clean = clean.substring(startIdx, lastBrace + 1);
+  } else if (firstBracket !== -1) {
+    startIdx = firstBracket;
+    const lastBracket = clean.lastIndexOf(']');
+    if (lastBracket > startIdx) clean = clean.substring(startIdx, lastBracket + 1);
+  }
+
+  // 1. Double-escape single LaTeX math commands & invalid JSON escape sequences
+  let s = clean.replace(/(?<!\\)\\([a-zA-Z]+|[^"\\/bfnrtu0-9])/g, (_match, p1) => {
+    return '\\\\' + p1;
   });
 
+  // 2. Fix unclosed strings and brackets if truncated mid-generation
   let inString = false;
   let escape = false;
-  const stack: ('{' | '[')[] = [];
+  const stack: string[] = [];
 
   for (let i = 0; i < s.length; i++) {
-    const char = s[i];
+    const c = s[i];
     if (escape) {
       escape = false;
       continue;
     }
-    if (char === '\\') {
+    if (c === '\\') {
       escape = true;
       continue;
     }
-    if (char === '"') {
+    if (c === '"') {
       inString = !inString;
       continue;
     }
     if (!inString) {
-      if (char === '{') stack.push('{');
-      else if (char === '[') stack.push('[');
-      else if (char === '}') stack.pop();
-      else if (char === ']') stack.pop();
+      if (c === '{') stack.push('}');
+      else if (c === '[') stack.push(']');
+      else if (c === '}' || c === ']') {
+        if (stack.length > 0 && stack[stack.length - 1] === c) {
+          stack.pop();
+        }
+      }
     }
   }
 
+  // If truncated inside a string literal, close the string
   if (inString) {
-    throw new Error("JSON is structurally truncated (unclosed string)");
+    s += '"';
   }
-  
+
+  // Remove trailing comma if string ended after comma
   s = s.replace(/,\s*$/, '');
 
-  if (stack.length > 0) {
-    throw new Error(`JSON is structurally truncated (unclosed ${stack[stack.length - 1]})`);
+  // Close any unclosed object/array brackets in reverse order
+  while (stack.length > 0) {
+    const closing = stack.pop();
+    s = s.replace(/,\s*$/, '') + closing;
   }
+
+  // Remove any remaining trailing commas before } or ]
+  s = s.replace(/,(\s*[}\]])/g, '$1');
 
   return s;
 }
+
 export function parseJSON<T>(text: string): T {
   if (!text || text.trim().length === 0) throw new Error('[parseJSON] Empty response from AI');
 
@@ -366,12 +561,13 @@ export function parseJSON<T>(text: string): T {
     p = JSON.parse(extracted);
   } catch (e1: any) {
     try {
-      p = JSON.parse(robustRepairJSON(extracted));
+      p = JSON.parse(repairJsonWithLatex(extracted));
     } catch (e2: any) {
-      if (e2.message.includes('structurally truncated')) {
-        throw new Error(`[parseJSON] Model response was truncated mid-generation. Retrying...`);
+      try {
+        p = JSON.parse(repairJsonWithLatex(clean));
+      } catch (e3: any) {
+        throw new Error(`[parseJSON] Parse failed (${e3.message}).`);
       }
-      throw new Error(`[parseJSON] Parse failed (${e2.message}). Extracted: ${extracted.slice(0, 100)}...`);
     }
   }
 
@@ -384,8 +580,15 @@ export function parseJSON<T>(text: string): T {
 
   if (Array.isArray(p)) return p as T;
   if (typeof p === 'object' && p !== null) {
-    const nested = Object.values(p).find((v): v is unknown[] => Array.isArray(v));
-    if (nested && !p.stem && !p.correct) return nested as T; 
+    // If it's a multi-category object (like chapters, topics, questions), preserve the object
+    if (p.chapters || p.topics || p.questions || p.Chapters || p.Topics || p.Questions) {
+      return p as T;
+    }
+    const arrayKeys = Object.keys(p).filter((k) => Array.isArray((p as any)[k]));
+    // Only unwrap if there is exactly 1 array key in the object (e.g. { "questions": [...] } or { "data": [...] }) and it's not a question itself
+    if (arrayKeys.length === 1 && !p.stem && !p.correct && !p.question) {
+      return (p as any)[arrayKeys[0]] as T;
+    }
     return p as T;
   }
   
@@ -425,12 +628,14 @@ export async function planMicroTopics(
   token: string, model: string, providerType: string,
   ctx: { topicName: string; boardName: string; standardName: string; subjectName: string; chapterName: string },
   strictJeeOnly = false,
+  customInstructions?: string,
+  customBaseUrl?: string,
 ): Promise<{ topics: MicroTopic[]; tokens: { input: number; output: number } }> {
   if (strictJeeOnly && !isJeeGenerationAllowedContext(ctx)) {
     throw new Error(`[Stage 1] Off-syllabus context: ${ctx.subjectName} / ${ctx.chapterName} / ${ctx.topicName}`);
   }
 
-  // ── Fast path: pull from database (zero AI cost) ───────────────────────────
+  // ── Fast path: pull from database (zero AI cost) — only if no custom instructions ──
   // Topics store chapterName as a denormalized field for fast lookup.
   let topicQuery: FirebaseFirestore.Query = firestore
     .collection("topics")
@@ -444,7 +649,7 @@ export async function planMicroTopics(
     difficulty: t.difficulty ?? null,
   }));
 
-  if (dbTopics.length >= 3) {
+  if (dbTopics.length >= 3 && !customInstructions) {
     const topics: MicroTopic[] = dbTopics.map(t => ({
       name: t.name,
       concepts: [t.name, t.chapter],
@@ -461,11 +666,12 @@ export async function planMicroTopics(
 Return ONLY a valid JSON array. No markdown. No explanation.
 ${SYLLABUS_GUARDRAIL}`;
   const prompt = `Topic: "${ctx.topicName}" — Chapter: "${ctx.chapterName}" (${ctx.subjectName}, ${ctx.boardName} ${ctx.standardName})
-
+${customInstructions ? `\nAdmin Special Instructions / Focus:\n"${customInstructions}"\n` : ''}
 Generate exactly 6 to 8 DEEP MICRO-TOPICS for JEE Advanced paper setting.
 
 Rules:
 - Every micro-topic MUST directly test "${ctx.topicName}"
+${customInstructions ? `- Align the micro-topics with the Admin's instructions above` : ''}
 - Each must be specific, narrow, and uniquely testable at JEE Advanced level
 - Include non-obvious cross-chapter links or hidden symmetry
 - EXCLUDE: NCERT definitions, formula memorisation, standard solved examples
@@ -474,7 +680,7 @@ Rules:
 Return ONLY a JSON array:
 [{ "name": "Topic Name", "concepts": ["concept 1", "concept 2"], "crossLinks": ["link 1"], "depth": 4 }]`;
 
-  const { content: raw, promptTokens, completionTokens } = await callAIWithTokens(token, model, providerType, sys, prompt, 0.9, 3000, true);
+  const { content: raw, promptTokens, completionTokens } = await callAIWithTokens(token, model, providerType, sys, prompt, 0.9, 3000, true, customBaseUrl);
   const parsed = parseJSON<MicroTopic[]>(raw);
   if (!Array.isArray(parsed)) throw new Error(`[Stage 1] Response is not an array`);
 
@@ -508,6 +714,141 @@ export interface RetryHint {
   suggestion: string;
 }
 
+export interface QuestionTypeSpec {
+  isMcq: boolean;
+  isMultipleCorrect: boolean;
+  isNumerical: boolean;
+  isTrueFalse: boolean;
+  typeLabel: string;
+  promptInstructions: string;
+  jsonStructure: string;
+}
+
+export function getQuestionTypeSpec(questionType: string): QuestionTypeSpec {
+  const t = String(questionType || "").toLowerCase().trim();
+
+  if (t === "numerical" || t === "integer") {
+    return {
+      isMcq: false,
+      isMultipleCorrect: false,
+      isNumerical: true,
+      isTrueFalse: false,
+      typeLabel: "Numerical / Integer Answer",
+      promptInstructions: `MANDATORY QUESTION TYPE: NUMERICAL / INTEGER ANSWER QUESTION (NO OPTIONS)
+- Do NOT provide options (A, B, C, D). The "options" field MUST be omitted.
+- The question stem MUST require computing a single numerical or integer value (e.g., "The magnitude of the force in Newtons is ______" or "The value of k is ______").
+- "correctAnswer" MUST be a single exact real number or integer (e.g. "4", "11", "0.75").`,
+      jsonStructure: `"correctAnswer": "<exact numerical value, e.g. 11>",`,
+    };
+  }
+
+  if (t === "multiple_correct" || t === "multi-correct" || t === "multiple_choice_multi") {
+    return {
+      isMcq: true,
+      isMultipleCorrect: true,
+      isNumerical: false,
+      isTrueFalse: false,
+      typeLabel: "Multiple Choice (One or More Correct)",
+      promptInstructions: `MANDATORY QUESTION TYPE: MULTIPLE CHOICE QUESTION (ONE OR MORE THAN ONE OPTION CORRECT)
+- You MUST provide exactly 4 distinct options: A, B, C, D in the "options" array.
+- ONE OR MORE options (1, 2, 3, or all 4) can be correct.
+- "correctIndices" MUST list all correct option indices (e.g. [0, 2] for options A and C).
+- "correctAnswer" must be the comma-separated letters of the correct options (e.g. "A, C").`,
+      jsonStructure: `"options": ["<option A>", "<option B>", "<option C>", "<option D>"],
+  "correctIndices": [0, 2],
+  "correctAnswer": "A, C",`,
+    };
+  }
+
+  if (t === "true-false" || t === "true_false") {
+    return {
+      isMcq: true,
+      isMultipleCorrect: false,
+      isNumerical: false,
+      isTrueFalse: true,
+      typeLabel: "True or False",
+      promptInstructions: `MANDATORY QUESTION TYPE: TRUE OR FALSE QUESTION
+- Provide exactly 2 options: ["True", "False"].
+- "correctIndices" MUST be [0] (True) or [1] (False).
+- "correctAnswer" MUST be "True" or "False".`,
+      jsonStructure: `"options": ["True", "False"],
+  "correctIndices": [0],
+  "correctAnswer": "True",`,
+    };
+  }
+
+  if (t === "assertion-reason" || t === "assertion_reason") {
+    return {
+      isMcq: true,
+      isMultipleCorrect: false,
+      isNumerical: false,
+      isTrueFalse: false,
+      typeLabel: "Assertion - Reason",
+      promptInstructions: `MANDATORY QUESTION TYPE: ASSERTION - REASON QUESTION
+- The stem MUST contain two clearly labeled statements: "Assertion (A): <statement>" and "Reason (R): <statement>".
+- Options MUST be the 4 standard choices:
+  ["Both (A) and (R) are true and (R) is the correct explanation of (A)",
+   "Both (A) and (R) are true but (R) is not the correct explanation of (A)",
+   "(A) is true but (R) is false",
+   "(A) is false but (R) is true"]
+- "correctIndices" MUST be [0], [1], [2], or [3].`,
+      jsonStructure: `"options": ["Both (A) and (R) are true and (R) is the correct explanation of (A)", "Both (A) and (R) are true but (R) is not the correct explanation of (A)", "(A) is true but (R) is false", "(A) is false but (R) is true"],
+  "correctIndices": [0],
+  "correctAnswer": "A",`,
+    };
+  }
+
+  if (t === "match-following" || t === "match_following" || t === "matrix-match") {
+    return {
+      isMcq: true,
+      isMultipleCorrect: false,
+      isNumerical: false,
+      isTrueFalse: false,
+      typeLabel: "Match the Following",
+      promptInstructions: `MANDATORY QUESTION TYPE: MATCH THE FOLLOWING / MATRIX MATCH
+- Stem must present Column I with items (A, B, C, D) and Column II with items (p, q, r, s).
+- Provide 4 distinct matching combination options in "options".
+- "correctIndices" MUST specify the single correct matching option [0].`,
+      jsonStructure: `"options": ["A->p; B->q; C->r; D->s", "A->q; B->p; C->s; D->r", "A->s; B->r; C->p; D->q", "A->r; B->s; C->q; D->p"],
+  "correctIndices": [0],
+  "correctAnswer": "A",`,
+    };
+  }
+
+  if (t === "short-answer" || t === "long-answer" || t === "very-short" || t === "fill-blank" || t === "one-word" || t === "subjective" || t === "case-study") {
+    return {
+      isMcq: false,
+      isMultipleCorrect: false,
+      isNumerical: false,
+      isTrueFalse: false,
+      typeLabel: t.toUpperCase(),
+      promptInstructions: `MANDATORY QUESTION TYPE: ${t.toUpperCase()} (DESCRIPTIVE / NON-MCQ)
+- Do NOT provide options (A, B, C, D). The "options" field MUST be omitted.
+- "correctAnswer" must contain the definitive correct answer or key points.
+- "solutionSteps" must provide the complete explanation.`,
+      jsonStructure: `"correctAnswer": "<definitive answer>",`,
+    };
+  }
+
+  // Default: Single Correct Multiple Choice Question
+  return {
+    isMcq: true,
+    isMultipleCorrect: false,
+    isNumerical: false,
+    isTrueFalse: false,
+    typeLabel: "Multiple Choice Question (Single Correct)",
+    promptInstructions: `MANDATORY QUESTION TYPE: MULTIPLE CHOICE QUESTION (SINGLE CORRECT OPTION)
+- You MUST provide exactly 4 distinct options: A, B, C, D in the "options" array: ["<text of option A>", "<text of option B>", "<text of option C>", "<text of option D>"].
+- EXACTLY ONE option MUST be correct.
+- "correctIndices" MUST be an array containing exactly one correct index: [0] (or 1, 2, 3).
+- "correctAnswer" MUST be the exact value of the correct option.
+- NEVER generate a question without 4 options. Every generated question MUST strictly be a 4-option MCQ.`,
+    jsonStructure: `"options": ["<option A>", "<option B>", "<option C>", "<option D>"],
+  "correctIndices": [0],
+  "correctAnswer": "<exact correct value>",`,
+  };
+}
+
 export async function generateQuestionStages(
   token: string, model: string, providerType: string,
   seed: ConceptSeed, params: GenerationRequest,
@@ -516,11 +857,11 @@ export async function generateQuestionStages(
   log: (msg: string) => void,
   tag: string,
   hint?: RetryHint,
+  customBaseUrl?: string,
 ): Promise<{ result: Record<string, unknown>; tokens: { input: number; output: number } }> {
   const { selectedTopics, persona } = seed;
   const conceptList = selectedTopics.map(t => `• ${t.name}`).join("\n");
-  const isMcq = /mcq|multiple.?choice/i.test(params.questionType);
-  const isMultipleCorrect = /multiple/i.test(params.questionType);
+  const qTypeSpec = getQuestionTypeSpec(params.questionType);
 
   const sysBase = `You are ${persona.name} — JEE Advanced paper setter.
 Return ONLY valid JSON. No markdown formatting (\`\`\`json). No explanations outside the JSON keys. Inside JSON strings, ALL backslashes must be doubled (\\\\vec not \\vec). Wrap ALL math in $ (e.g. $\\\\vec{a}$).`;
@@ -533,21 +874,23 @@ Return ONLY valid JSON. No markdown formatting (\`\`\`json). No explanations out
 Concepts to fuse:
 ${conceptList}
 ${hintBlock}
+${params.customInstructions ? `\nCRITICAL ADMIN INSTRUCTIONS / SPECIAL REQUIREMENTS (STRICTLY PRIORITIZE THIS):\n"${params.customInstructions}"\n` : ''}
+${qTypeSpec.promptInstructions}
 
-Write ONE complete, original JEE Advanced question.
 Rules:
-- Include the stem, step-by-step mathematical solution, exactly 4 options (if MCQ), and metadata.
+${params.customInstructions ? `- Strictly adhere to the Admin's instructions and tone specified above.` : ''}
+- Include the stem, step-by-step mathematical solution, and metadata.
 - Require ≥2 conceptual insights with one non-obvious hidden observation.
 - NEVER use standard textbook setups.
-- Ensure exactly one correct option (unless multiple choice).
-- Options should be distinct mathematical expressions.
+- MATHEMATICAL EXISTENCE & RIGOR (CRITICAL):
+  • Verify that all constructed geometric loci, tangents, or intersection points (e.g., point M) ACTUALLY EXIST as real points in the specified quadrant/interval. Never assume two curves intersect without algebraic proof.
+  • For extrema (minimum/maximum) on an interval (a, b), verify that the extremum is an attained critical point inside the open domain, NOT an unachieved boundary limit / infimum / supremum (e.g. as θ → 0+).
+  • Verify every algebra step, series sum, and trigonometric identity so the final answer matches Option A exactly.
 - CRITICAL: ALL mathematical variables, vectors, and equations MUST be wrapped in single $ signs (e.g., $\\\\vec{a}$ or $x^2 + y^2 = 1$).
-${ params.includeDiagrams === 'yes'
-  ? `- If a diagram genuinely helps the question, provide it in the "diagram" JSON field.
-- For biology/anatomy, use type "wikimedia" and provide a highly specific "search" term (e.g. "human heart cross section").
-- For math/physics/geometry, use type "svg" and provide raw, clean SVG code in "content". Only use basic shapes (path, rect, circle, line, text) and ensure viewBox is set.`
-  : params.includeDiagrams === 'ai'
-  ? `- Decide for yourself whether a diagram would genuinely help this question. If yes, include it in the "diagram" JSON field (SVG for math/physics/geometry, wikimedia for biology/anatomy). If not, omit the field entirely.`
+${ params.includeDiagrams === 'provider'
+  ? `- If a visual diagram or technical illustration helps the question, provide it in the "diagram" JSON field. Set "type": "image" and provide a detailed academic "imagePrompt" to be rendered with DALL-E 3.`
+  : params.includeDiagrams === 'ai' || params.includeDiagrams === 'yes'
+  ? `- If a visual diagram or technical illustration genuinely enhances the question, provide it in the "diagram" JSON field. Set "type": "image" with a descriptive "imagePrompt", or "type": "svg" with "content".`
   : `- Do NOT include any diagram. All information must be conveyed through text and math notation only.`
 }
 
@@ -555,32 +898,128 @@ Return ONLY this JSON structure (with no extra text):
 {
   "stem": "<complete question text, ≥80 chars>",
   "solutionSteps": "<rigorous step-by-step derivation>",
-  "correctAnswer": "<exact correct value>",
-  ${isMcq ? `"options": ["<option A>", "<option B>", "<option C>", "<option D>"],
-  "correctIndices": [0${isMultipleCorrect ? ', 2' : ''}],` : ''}
+  ${qTypeSpec.jsonStructure}
   "estimatedSolveTimeSeconds": 240,
   "bloomsLevel": "Analyze",
   "hiddenInsight": "<one sentence key insight>"${params.includeDiagrams !== 'no' ? `,
   "diagram": {
     "required": true,
-    "type": "svg",
-    "content": "<raw svg code>",
+    "type": "image",
+    "imagePrompt": "<detailed technical illustration prompt, e.g. 'Physics vector diagram showing two forces u and v at 120 degrees on Cartesian plane'>",
+    "content": "<raw svg code if type is svg>",
     "search": "<wikimedia search term if type is wikimedia>"
   }` : ''}
 }
 ${params.includeDiagrams !== 'no' ? '(Omit "diagram" field completely if no diagram is needed).' : ''}`;
 
-  const res = await callAIWithTokens(token, model, providerType, sysBase, promptAll, 0.8, 3000, true);
+  const res = await callAIWithTokens(token, model, providerType, sysBase, promptAll, 0.8, 3000, true, customBaseUrl);
   const data = parseJSON<any>(res.content);
 
   let stemText = data.stem || data.question || "";
   if (stemText.length < 60) throw new Error("Stem too short");
 
-  // Handle Diagram Injection — skip only when explicitly disabled
-  if (params.includeDiagrams !== 'no' && data.diagram && data.diagram.required && data.diagram.type) {
+  // Validate MCQ options strictly if required
+  if (qTypeSpec.isMcq) {
+    const minOptions = qTypeSpec.isTrueFalse ? 2 : 4;
+    if (!Array.isArray(data.options) || data.options.length < minOptions) {
+      throw new Error(`Model generated non-MCQ format for ${qTypeSpec.typeLabel} (missing ${minOptions} options). Retrying.`);
+    }
+  }
+
+  // Handle Diagram & Image Generation Injection — skip only when explicitly disabled
+  if (params.includeDiagrams !== 'no' && data.diagram && (data.diagram.required || data.diagram.type)) {
     try {
-      if (data.diagram.type === 'wikimedia' && data.diagram.search) {
-            const url = `https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&pithumbsize=600&generator=search&gsrsearch=${encodeURIComponent(data.diagram.search)}&gsrlimit=1`;
+      const diagType = String(data.diagram.type || "").toLowerCase();
+      const imgPrompt = data.diagram.imagePrompt || data.diagram.prompt || data.diagram.search;
+
+      if ((diagType === 'image' || diagType === 'ai_image' || diagType === 'ai') && imgPrompt) {
+        let imageUrl = '';
+
+        const diagToken = (params.diagramToken || params.diagramApiKey || token || "").trim();
+        const diagProviderType = (params.diagramProviderType || providerType || "").toLowerCase();
+        const diagModel = params.diagramModel || (diagProviderType === 'gemini' ? 'imagen-3.0-generate-002' : 'dall-e-3');
+
+        // Provider API option (OpenAI DALL-E or Google Imagen)
+        if (params.includeDiagrams === 'provider' && (diagProviderType === 'openai' || diagProviderType === 'azure_openai') && diagToken) {
+          try {
+            const openAiModel = diagModel.startsWith('dall-e') ? diagModel : 'dall-e-3';
+            log(`[Image] Calling OpenAI DALL-E API (${openAiModel}) for high-res diagram...`);
+            const dRes = await fetch('https://api.openai.com/v1/images/generations', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${diagToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: openAiModel,
+                prompt: `Academic scientific educational textbook illustration: ${String(imgPrompt).trim().slice(0, 950)}. Clean white background, high contrast, precise textbook diagram, no watermarks.`,
+                n: 1,
+                size: openAiModel === 'dall-e-2' ? '512x512' : '1024x1024',
+                quality: 'standard',
+              }),
+            });
+            if (dRes.ok) {
+              const dData = (await dRes.json()) as any;
+              imageUrl = dData?.data?.[0]?.url || '';
+              if (imageUrl) log(`[Image] ✓ Generated high-res diagram via OpenAI (${openAiModel})`);
+            } else {
+              const dErr = await dRes.text();
+              log(`[Image] OpenAI DALL-E notice: ${dErr.slice(0, 150)} — falling back to fast AI engine`);
+            }
+          } catch (dErr: any) {
+            log(`[Image] Provider image API failed: ${dErr.message} — falling back`);
+          }
+        } else if (params.includeDiagrams === 'provider' && diagProviderType === 'gemini' && diagToken) {
+          try {
+            const googleModel = diagModel.includes('imagen') ? diagModel : 'imagen-3.0-generate-002';
+            log(`[Image] Calling Google Imagen API (${googleModel}) for high-res diagram...`);
+            const gRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${googleModel}:predict?key=${diagToken}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                instances: [
+                  { prompt: `Academic textbook scientific diagram: ${String(imgPrompt).trim().slice(0, 950)}. Pure white background, 2D vector technical line drawing, clear educational labels, high clarity, no dark theme.` }
+                ],
+                parameters: { sampleCount: 1, aspectRatio: '1:1', outputMimeType: 'image/jpeg' },
+              }),
+            });
+            if (gRes.ok) {
+              const gData = (await gRes.json()) as any;
+              const b64 = gData?.predictions?.[0]?.bytesBase64Encoded;
+              if (b64) {
+                imageUrl = `data:image/jpeg;base64,${b64}`;
+                log(`[Image] ✓ Generated high-res diagram via Google Imagen (${googleModel})`);
+              }
+            } else {
+              const gErr = await gRes.text();
+              log(`[Image] Google Imagen notice: ${gErr.slice(0, 150)} — falling back`);
+            }
+          } catch (gErr: any) {
+            log(`[Image] Google Imagen API failed: ${gErr.message} — falling back`);
+          }
+        }
+
+        // Fast Pollinations fallback
+        if (!imageUrl) {
+          try {
+            log(`[Image] Generating high-resolution academic illustration via image engine...`);
+            const encodedPrompt = encodeURIComponent(`high quality technical diagram, textbook illustration style, scientific schematic: ${imgPrompt}, clean white background, detailed vector line drawing`);
+            const fallbackUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&nologo=true`;
+            const check = await fetch(fallbackUrl, { method: 'HEAD', signal: AbortSignal.timeout(6000) });
+            if (check.ok) {
+              imageUrl = fallbackUrl;
+              log(`[Image] ✓ High-res academic diagram attached`);
+            }
+          } catch (imgErr: any) {
+            log(`[Image] ⚠️ Diagram engine notice: ${imgErr.message}`);
+          }
+        }
+
+        if (imageUrl) {
+          data.diagram = { ...data.diagram, imageUrl, type: 'image' };
+        }
+      } else if (diagType === 'wikimedia' && data.diagram.search) {
+        const url = `https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&pithumbsize=600&generator=search&gsrsearch=${encodeURIComponent(data.diagram.search)}&gsrlimit=1`;
         const wikiRes = await fetch(url);
         const wikiData: any = await wikiRes.json();
         const pages = wikiData?.query?.pages;
@@ -588,28 +1027,32 @@ ${params.includeDiagrams !== 'no' ? '(Omit "diagram" field completely if no diag
           const pageId = Object.keys(pages)[0];
           const thumbUrl = pages[pageId]?.thumbnail?.source;
           if (thumbUrl) {
-                stemText += `\n\n<diagram type="image" url="${thumbUrl}"></diagram>`;
+            stemText += `\n\n<diagram type="image" url="${thumbUrl}"></diagram>`;
           }
         }
-      } else if (data.diagram.type === 'svg' && data.diagram.content) {
-            stemText += `\n\n<diagram type="svg">${data.diagram.content}</diagram>`;
+      } else if (diagType === 'svg' && data.diagram.content) {
+        stemText += `\n\n<diagram type="svg">${data.diagram.content}</diagram>`;
+      } else if (imgPrompt) {
+        const cleanPrompt = encodeURIComponent(String(imgPrompt).trim());
+        const imageUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=800&height=600&nologo=true`;
+        stemText += `\n\n<diagram type="image" url="${imageUrl}"></diagram>`;
       }
     } catch (err) {
-          log(`[Warning] Diagram fetch failed: ${err}`);
+      log(`[Warning] Diagram generation failed: ${err}`);
     }
   }
 
-  let formattedOptions = null;
-  let correctOption = data.correctAnswer || "A";
+  let formattedOptions: string | null = null;
+  let correctOption = String(data.correctAnswer || "A");
 
-  if (isMcq && Array.isArray(data.options) && data.options.length === 4) {
+  if (qTypeSpec.isMcq && Array.isArray(data.options) && data.options.length >= 2) {
     const labels = ['A', 'B', 'C', 'D'];
-    formattedOptions = data.options.map((c: any, i: number) => `${labels[i]}) ${c}`).join('\n');
-    const cIndices = Array.isArray(data.correctIndices) ? data.correctIndices : [0];
-    correctOption = cIndices.map((i: number) => labels[i]).join(',');
-  } else if (isMcq) {
-    formattedOptions = `A) ${correctOption}\nB) -(${correctOption})\nC) 2(${correctOption})\nD) 0`;
-    correctOption = "A";
+    formattedOptions = data.options.map((c: any, i: number) => `${labels[i] || i + 1}) ${c}`).join('\n');
+    if (Array.isArray(data.correctIndices) && data.correctIndices.length > 0) {
+      correctOption = data.correctIndices.map((i: number) => labels[i] || String(i + 1)).join(',');
+    }
+  } else {
+    formattedOptions = null;
   }
 
   const result = {
@@ -656,6 +1099,8 @@ export type RejectionCategory =
   | "ambiguous"
   | "weak_options"
   | "wrong_solution"
+  | "invalid_math"
+  | "domain_error"
   | "";
 
 export interface ExpertReviewResult {
@@ -675,29 +1120,36 @@ export async function reviewAsJEEExpert(
   q: Record<string, unknown>,
   difficulty: string,
   conceptNames: string[],
+  customBaseUrl?: string,
 ): Promise<ExpertReviewResult> {
-  const sys = `You are a senior IIT Bombay professor and official JEE Advanced paper setter.
-Primary duties:
-1. IMMEDIATELY REJECT any question using non-JEE concepts (Minkowski, Fourier, tensors, topology, etc.).
-2. REJECT questions solvable by one formula or direct substitution.
-3. ACCEPT only questions requiring ≥2 chained insights using ONLY JEE Advanced syllabus concepts.
-Return ONLY valid JSON.`;
+  const sys = `You are a Senior Academic Auditor and former JEE Advanced Paper Setting Committee Member.
+Audit the question strictly according to JEE Advanced quality, mathematical correctness, and real existence standards. Return ONLY valid JSON.`;
 
   const diffLabel = difficulty.toUpperCase();
-  const prompt = `Review this JEE Advanced question.
-Difficulty level expected: ${diffLabel}
-Concepts that should be tested: ${conceptNames.join(", ")}
+  const prompt = `AUDIT REPORT FOR GENERATED JEE ADVANCED QUESTION:
+Difficulty Targeted: ${diffLabel}
+Fused Concepts: ${conceptNames.join(", ")}
 
-Question: ${q.stem}
-Answer: ${q.correct}
+Question Stem:
+${q.stem}
 
-Score each axis 0-10:
-- conceptual: depth of understanding required
-- originality: how novel/non-textbook the setup is
-- jeeSuitability: how appropriate for JEE Advanced (10 = perfect fit)
-- algebra: algebraic complexity required to solve
+Options:
+${q.options ? JSON.stringify(q.options) : "None (Integer/Numerical)"}
 
-Rejection categories: "off_syllabus" | "too_easy" | "too_formulaic" | "ambiguous" | ""
+Stated Correct Answer:
+${q.correct}
+
+Proposed Step-by-Step Solution:
+${q.explanation || "None"}
+
+Audit Checklist:
+1. Math & Solution Soundness: Does the derivation hold without algebraic or conceptual errors?
+2. Real Existence: Do all defined points, intersections, and geometric conditions actually exist in the specified domain?
+3. Extrema Validity: If asking for min/max, is it truly an attained extremum rather than an infimum/boundary limit?
+4. Correct Answer Match: Does the stated correct option precisely equal the derived value?
+5. JEE Advanced Depth: Is it genuine IIT Advanced caliber (requiring multi-step insight)?
+
+Rejection categories: "invalid_math" | "domain_error" | "wrong_solution" | "off_syllabus" | "too_easy" | "too_formulaic" | "ambiguous" | ""
 
 Return JSON:
 {
@@ -710,7 +1162,7 @@ Return JSON:
   "expertComment": "<brief positive or constructive comment>"
 }`;
 
-  const res = await callAIWithTokens(token, model, providerType, sys, prompt, 0.3, 900, true);
+  const res = await callAIWithTokens(token, model, providerType, sys, prompt, 0.2, 1000, true, customBaseUrl);
   const parsed = parseJSON<any>(res.content);
   const isPassed = (parsed.passed ?? true) && (parsed.syllabusCompliant ?? true);
   return {
@@ -761,7 +1213,7 @@ Return JSON:
   };
 }
 
-export async function analyzeDifficulty(token: string, model: string, providerType: string, q: Record<string, unknown>, seed: ConceptSeed, blooms: string)
+export async function analyzeDifficulty(token: string, model: string, providerType: string, q: Record<string, unknown>, seed: ConceptSeed, blooms: string, customBaseUrl?: string)
 : Promise<{ passed: boolean; overallScore: number; scores: any; tokens: { input: number; output: number } }> {
   const sys = `You are a cognitive scientist. Return ONLY valid JSON.`;
   const prompt = `Score this question (0-10 each axis):
@@ -771,7 +1223,7 @@ Return: {
   "scores": {"conceptualDepth":9,"hiddenObservation":9,"originality":8,"jeeSimilarity":9,"algebraComplexity":7},
   "passed": true
 }`;
-  const res = await callAIWithTokens(token, model, providerType, sys, prompt, 0.2, 1000, true);
+  const res = await callAIWithTokens(token, model, providerType, sys, prompt, 0.2, 1000, true, customBaseUrl);
   const parsed = parseJSON<any>(res.content);
   const overall = computeWeightedScore(parsed.scores || {});
   return { 
@@ -782,7 +1234,7 @@ Return: {
   };
 }
 
-export async function runPaperEditor(token: string, model: string, providerType: string, questions: AgentResult[])
+export async function runPaperEditor(token: string, model: string, providerType: string, questions: AgentResult[], customBaseUrl?: string)
 : Promise<{ passed: boolean; rejectedIndices: number[]; suggestions: string; tokens: { input: number; output: number } }> {
   if (questions.length < 2) return { passed: true, rejectedIndices: [], suggestions: "", tokens: { input: 0, output: 0 } };
 
@@ -790,7 +1242,7 @@ export async function runPaperEditor(token: string, model: string, providerType:
   const summaries = questions.map((q, i) => ({ index: i, preview: q.question.slice(0, 100), concepts: q.conceptsUsed }));
   const prompt = `Review batch of ${questions.length} questions:\n${JSON.stringify(summaries)}\nCheck for concept repetition.\nReturn: {"passed": true, "rejectedIndices": [], "suggestions": "..."}`;
   
-  const res = await callAIWithTokens(token, model, providerType, sys, prompt, 0.3, 800, true);
+  const res = await callAIWithTokens(token, model, providerType, sys, prompt, 0.3, 800, true, customBaseUrl);
   const parsed = parseJSON<any>(res.content);
   return { ...parsed, rejectedIndices: parsed.rejectedIndices || [], tokens: { input: res.promptTokens, output: res.completionTokens } };
 }
@@ -803,6 +1255,7 @@ export async function runJEEPipeline(
   ctx: { topicName: string; chapterName: string; subjectName: string; boardName: string; standardName: string },
   onLog?: (currentLog: string) => void,
   signal?: AbortSignal,
+  customBaseUrl?: string,
 ): Promise<{ results: AgentResult[]; agentLog: string; inputTokens: number; outputTokens: number }> {
   const strictJeeOnly = params.jeeAdvancedOnly === true;
 
@@ -821,6 +1274,9 @@ export async function runJEEPipeline(
   log(`${"═".repeat(60)}`);
   log(`[JEE Pipeline] ${params.count}× ${params.difficulty} ${params.questionType}`);
   log(`[JEE Pipeline] Topic: ${ctx.topicName} | Chapter: ${ctx.chapterName}`);
+  if (params.customInstructions) {
+    log(`[Admin Prompt] "${params.customInstructions}"`);
+  }
   log(`${"═".repeat(60)}`);
 
   log("\n[Stage 1] Topic Planner...");
@@ -828,7 +1284,7 @@ export async function runJEEPipeline(
 
   for (let s1try = 1; s1try <= QUALITY.maxStage1Retries; s1try++) {
     try {
-      const { topics, tokens } = await planMicroTopics(token, model, providerType, ctx, strictJeeOnly);
+      const { topics, tokens } = await planMicroTopics(token, model, providerType, ctx, strictJeeOnly, params.customInstructions, customBaseUrl);
       inputTokens += tokens.input; outputTokens += tokens.output;
       microTopics = topics;
       log(`[Stage 1] ✓ ${microTopics.length} micro-topics on attempt ${s1try}`);
@@ -868,14 +1324,14 @@ export async function runJEEPipeline(
       log(`${tag} Stage 2 ✓ → [${currentSeed.selectedTopics.map(t => t.name).join(" + ")}]`);
 
       await sleep(500);
-      const { result: raw, tokens: stage3Tokens } = await generateQuestionStages(token, model, providerType, currentSeed, params, ctx, generatedStems, log, tag, lastHint);
+      const { result: raw, tokens: stage3Tokens } = await generateQuestionStages(token, model, providerType, currentSeed, params, ctx, generatedStems, log, tag, lastHint, customBaseUrl);
       inputTokens += stage3Tokens.input; outputTokens += stage3Tokens.output;
       lastHint = undefined; // consume hint
 
       await sleep(400);
       const expertCheck: any = strictJeeOnly
-        ? await reviewAsJEEExpert(token, model, providerType, raw, params.difficulty, currentSeed.selectedTopics.map(t => t.name))
-        : await analyzeDifficulty(token, model, providerType, raw, currentSeed, params.difficulty);
+        ? await reviewAsJEEExpert(token, model, providerType, raw, params.difficulty, currentSeed.selectedTopics.map(t => t.name), customBaseUrl)
+        : await analyzeDifficulty(token, model, providerType, raw, currentSeed, params.difficulty, customBaseUrl);
       inputTokens += expertCheck.tokens.input; outputTokens += expertCheck.tokens.output;
 
       let diffCheck: { overallScore: number; scores: any };
@@ -885,7 +1341,7 @@ export async function runJEEPipeline(
           const category = expertCheck.rejectionCategory || "general";
           log(`${tag} Stage 4 ✗ [${category}] — ${expertCheck.rejectionReason}`);
 
-          if (category === "too_easy" || category === "too_formulaic" || category === "wrong_solution") {
+          if (category === "too_easy" || category === "too_formulaic" || category === "wrong_solution" || category === "invalid_math" || category === "domain_error") {
             lastHint = { category, suggestion: (expertCheck as any).suggestion || expertCheck.rejectionReason };
           } else {
             currentSeed = undefined;
@@ -928,7 +1384,7 @@ export async function runJEEPipeline(
         qualityScores: diffCheck.scores,
         overallScore: diffCheck.overallScore,
         selfCritique: "Passed",
-        expertComment: expertCheck.expertComment,
+        expertComment: expertCheck.expertComment ?? "",
       });
       generatedStems.push(String(raw.stem));
       log(`${tag} ✅ ACCEPTED — ${pool.length}/${params.count}\n`);

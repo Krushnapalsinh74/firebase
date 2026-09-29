@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "public": "artifacts/yunora-admin/dist/public",
+    "public": "artifacts/kpark-admin/dist/public",
     "ignore": [
       "firebase.json",
       "**/.*",

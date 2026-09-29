@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { firestore, nextId, nextNIds, docToObj, snapshotToArr, nowTs } from "@workspace/db";
 import { requireAuth, simpleDecrypt } from "../lib/auth.js";
+import { callAIWithTokens, extractJsonObject } from "../lib/pipeline.js";
 
 const router = Router();
 
@@ -117,13 +118,14 @@ router.post("/topics/ai-generate", requireAuth, async (req, res) => {
     const boardDoc = standard?.boardId ? await firestore.collection("boards").doc(String(standard.boardId)).get() : null;
     const board = boardDoc?.exists ? boardDoc.data() as any : null;
 
-    const token = simpleDecrypt(provider.encryptedToken);
+    const token = provider.encryptedToken ? simpleDecrypt(provider.encryptedToken) : (provider.apiKey || "");
 
-    const existingSnap = await firestore.collection("topics").where("chapterId", "==", chapterId).get();
+    const cIdNum = Number(chapterId);
+    const existingSnap = await firestore.collection("topics").where("chapterId", "==", isNaN(cIdNum) ? chapterId : cIdNum).get();
     const existingNames = existingSnap.docs.map((d) => d.data().name).join(", ") || "none";
 
-    const systemPrompt = `You are a curriculum expert for ${board?.name ?? "Indian"} board, ${standard?.name ?? ""}, ${subject?.name ?? ""}.
-Generate curriculum-aligned topic names with clear learning objectives. Return ONLY a valid JSON array. No markdown outside JSON.`;
+    const systemPrompt = `You are an expert curriculum specialist for ${board?.name ?? "Indian"} board, ${standard?.name ?? ""}, ${subject?.name ?? ""}.
+Generate curriculum-aligned topic names with clear learning objectives. Output must be a valid JSON object.`;
 
     const userPrompt = `List ALL the real topics that are covered in the chapter: "${chapter.name}" (Subject: ${subject?.name ?? ""}, Board: ${board?.name ?? ""}, ${standard?.name ?? ""}).
 
@@ -137,88 +139,76 @@ Requirements:
 - Include both conceptual and application topics
 - Do NOT pad with extra topics — only include topics that truly belong to this chapter
 
-Return a JSON array (number of items = actual topic count for this chapter):
-[
-  {
-    "name": "Topic name (concise, curriculum-standard phrasing)",
-    "description": "One sentence: what students will learn in this topic"
-  }
-]`;
+Return a JSON object containing a "topics" array:
+{
+  "topics": [
+    {
+      "name": "Topic name (concise, curriculum-standard phrasing)",
+      "description": "One sentence: what students will learn in this topic"
+    }
+  ]
+}`;
 
-    const OPENAI_COMPAT: Record<string, string> = {
-      openai:        "https://api.openai.com/v1/chat/completions",
-      github_models: "https://models.inference.ai.azure.com/chat/completions",
-      groq:          "https://api.groq.com/openai/v1/chat/completions",
-      gemini:        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-      azure_openai:  "https://models.inference.ai.azure.com/chat/completions",
-    };
-
-    const isRateLimit = (status: number) => status === 429 || status === 529;
-    const rateLimitMsg = "The AI provider is rate-limited or overloaded. Please wait a moment and try again.";
-
-    let raw: string;
-
-    if (provider.providerType === "anthropic") {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": token, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model, max_tokens: 3000, system: systemPrompt, messages: [{ role: "user", content: userPrompt }] }),
-      });
-      if (!response.ok) {
-        const text = await response.text();
-        res.status(502).json({ error: isRateLimit(response.status) ? rateLimitMsg : `Anthropic API error ${response.status}: ${text.slice(0, 200)}` });
-        return;
-      }
-      const data = await response.json() as { content: Array<{ type: string; text: string }> };
-      raw = data.content?.find(c => c.type === "text")?.text ?? "[]";
-    } else if (provider.providerType === "gemini") {
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${token}`;
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          system_instruction: { parts: { text: systemPrompt } },
-          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-          generationConfig: { temperature: 0.6, maxOutputTokens: 3000 },
-        }),
-      });
-      if (!response.ok) {
-        const text = await response.text();
-        res.status(502).json({ error: isRateLimit(response.status) ? rateLimitMsg : `AI API error ${response.status}: ${text.slice(0, 200)}` });
-        return;
-      }
-      const data = await response.json() as any;
-      raw = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
-    } else {
-      const endpoint = OPENAI_COMPAT[provider.providerType] ?? OPENAI_COMPAT.github_models;
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-        body: JSON.stringify({ model, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }], max_tokens: 3000, temperature: 0.6 }),
-      });
-      if (!response.ok) {
-        const text = await response.text();
-        res.status(502).json({ error: isRateLimit(response.status) ? rateLimitMsg : `AI API error ${response.status}: ${text.slice(0, 200)}` });
-        return;
-      }
-      const data = await response.json() as { choices: Array<{ message: { content: string } }> };
-      raw = data.choices[0]?.message?.content ?? "[]";
+    let raw = "";
+    try {
+      const aiResult = await callAIWithTokens(
+        token,
+        model,
+        provider.providerType || "gemini",
+        systemPrompt,
+        userPrompt,
+        0.5,
+        3000,
+        false
+      );
+      raw = aiResult.content;
+    } catch (aiErr: any) {
+      req.log.error({ err: aiErr }, "AI provider call failed in topics/ai-generate");
+      res.status(502).json({ error: aiErr.message || "Failed to generate topics from AI provider." });
+      return;
     }
 
     let topics: Array<{ name: string; description: string }> = [];
     try {
-      const match = raw.match(/```(?:json)?\s*([\s\S]*?)```/) ?? raw.match(/(\[[\s\S]*\])/);
-      const jsonStr = match ? match[1] : raw;
-      topics = JSON.parse(jsonStr!.trim());
+      const jsonStr = extractJsonObject(raw);
+      const parsed = JSON.parse(jsonStr.trim());
+      if (Array.isArray(parsed)) {
+        topics = parsed;
+      } else if (parsed && Array.isArray(parsed.topics)) {
+        topics = parsed.topics;
+      } else if (typeof parsed === "object") {
+        const found = Object.values(parsed).find(Array.isArray);
+        if (found) topics = found as any;
+      }
     } catch {
-      res.status(502).json({ error: "AI returned invalid JSON. Try again." });
+      const match = raw.match(/\[[\s\S]*\]/);
+      if (match) {
+        try {
+          topics = JSON.parse(match[0]);
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    // Sanitize and ensure format
+    const sanitizedTopics = (Array.isArray(topics) ? topics : [])
+      .filter((t) => t && (t.name || typeof t === "string"))
+      .map((t: any) => ({
+        name: typeof t === "string" ? t : String(t.name || "").trim(),
+        description: typeof t === "string" ? "" : String(t.description || "").trim(),
+      }))
+      .filter((t) => t.name.length > 0);
+
+    if (sanitizedTopics.length === 0) {
+      res.status(502).json({ error: "AI returned unparseable response. Please try again or switch models." });
       return;
     }
 
-    res.json({ topics, chapterName: chapter.name, subjectName: subject?.name, boardName: board?.name });
-  } catch (err) {
+    res.json({ topics: sanitizedTopics, chapterName: chapter.name, subjectName: subject?.name, boardName: board?.name });
+  } catch (err: any) {
     req.log.error({ err }, "AI generate topics error");
-    res.status(500).json({ error: "Internal server error" });
+    res.status(500).json({ error: err.message || "Internal server error" });
   }
 });
 

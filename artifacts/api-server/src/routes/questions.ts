@@ -1,51 +1,66 @@
 import { Router } from "express";
-import { firestore, docToObj, snapshotToArr, nowTs, toTs } from "@workspace/db";
+import { firestore, docToObj, snapshotToArr, nowTs, toTs, nextId } from "@workspace/db";
 import { requireAuth } from "../lib/auth.js";
+import { logActivity } from "../lib/audit.js";
 
 const router = Router();
 
 async function enrichQuestion(q: Record<string, any>) {
-  const [topicDoc, chapterDoc, subjectDoc, boardDoc, standardDoc] = await Promise.all([
-    q.topicId   ? firestore.collection("topics").doc(String(q.topicId)).get()     : Promise.resolve(null),
-    q.chapterId ? firestore.collection("chapters").doc(String(q.chapterId)).get() : Promise.resolve(null),
-    q.subjectId ? firestore.collection("subjects").doc(String(q.subjectId)).get() : Promise.resolve(null),
-    q.boardId   ? firestore.collection("boards").doc(String(q.boardId)).get()     : Promise.resolve(null),
-    q.standardId? firestore.collection("standards").doc(String(q.standardId)).get(): Promise.resolve(null),
-  ]);
-  return {
-    ...q,
-    topicName:    topicDoc?.exists    ? topicDoc.data()?.name    ?? null : null,
-    chapterName:  chapterDoc?.exists  ? chapterDoc.data()?.name  ?? null : null,
-    subjectName:  subjectDoc?.exists  ? subjectDoc.data()?.name  ?? null : null,
-    boardName:    boardDoc?.exists    ? boardDoc.data()?.name    ?? null : null,
-    standardName: standardDoc?.exists ? standardDoc.data()?.name ?? null : null,
-  };
+  try {
+    const [topicDoc, chapterDoc, subjectDoc, boardDoc, standardDoc] = await Promise.all([
+      q.topicId   ? firestore.collection("topics").doc(String(q.topicId)).get().catch(() => null)     : Promise.resolve(null),
+      q.chapterId ? firestore.collection("chapters").doc(String(q.chapterId)).get().catch(() => null) : Promise.resolve(null),
+      q.subjectId ? firestore.collection("subjects").doc(String(q.subjectId)).get().catch(() => null) : Promise.resolve(null),
+      q.boardId   ? firestore.collection("boards").doc(String(q.boardId)).get().catch(() => null)     : Promise.resolve(null),
+      q.standardId? firestore.collection("standards").doc(String(q.standardId)).get().catch(() => null): Promise.resolve(null),
+    ]);
+    return {
+      ...q,
+      topicName:    topicDoc?.exists    ? topicDoc.data()?.name    ?? null : null,
+      chapterName:  chapterDoc?.exists  ? chapterDoc.data()?.name  ?? null : null,
+      subjectName:  subjectDoc?.exists  ? subjectDoc.data()?.name  ?? null : null,
+      boardName:    boardDoc?.exists    ? boardDoc.data()?.name    ?? null : null,
+      standardName: standardDoc?.exists ? standardDoc.data()?.name ?? null : null,
+    };
+  } catch {
+    return q;
+  }
 }
 
 router.get("/questions", requireAuth, async (req, res) => {
   try {
     const { page = "1", limit = "50", search, boardId, standardId, subjectId, chapterId, topicId, difficulty, questionType, model, dateFrom, dateTo, lang } = req.query as Record<string, string>;
-    const pageNum = Math.max(1, parseInt(page));
-    const limitNum = Math.min(200, parseInt(limit));
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(200, parseInt(limit) || 50);
 
-    // Use the most selective equality filter as the Firestore query anchor,
-    // then filter the rest in JS to avoid composite index requirements.
+    // Query Firestore collection without composite index orderBy to prevent 500 errors
     let query: FirebaseFirestore.Query = firestore.collection("questions");
-    if (topicId)      query = query.where("topicId",      "==", parseInt(topicId));
-    else if (chapterId) query = query.where("chapterId",  "==", parseInt(chapterId));
-    else if (subjectId) query = query.where("subjectId",  "==", parseInt(subjectId));
-    else if (boardId)   query = query.where("boardId",    "==", parseInt(boardId));
+    if (topicId) {
+      const tid = isNaN(Number(topicId)) ? topicId : Number(topicId);
+      query = query.where("topicId", "==", tid);
+    } else if (chapterId) {
+      const cid = isNaN(Number(chapterId)) ? chapterId : Number(chapterId);
+      query = query.where("chapterId", "==", cid);
+    } else if (subjectId) {
+      const sid = isNaN(Number(subjectId)) ? subjectId : Number(subjectId);
+      query = query.where("subjectId", "==", sid);
+    } else if (boardId) {
+      const bid = isNaN(Number(boardId)) ? boardId : Number(boardId);
+      query = query.where("boardId", "==", bid);
+    }
 
-    query = query.orderBy("generatedAt");
     const snap = await query.get();
     let questions = snapshotToArr(snap) as any[];
 
-    // JS-side filters for remaining conditions
-    if (boardId && !topicId && !chapterId && !subjectId) { /* already filtered */ }
-    if (standardId) questions = questions.filter((q) => q.standardId === parseInt(standardId));
-    if (difficulty)   questions = questions.filter((q) => q.difficulty   === difficulty);
+    // JS-side filters for robust matching (supports both string & number IDs)
+    if (boardId)      questions = questions.filter((q) => String(q.boardId) === String(boardId));
+    if (standardId)   questions = questions.filter((q) => String(q.standardId) === String(standardId));
+    if (subjectId)    questions = questions.filter((q) => String(q.subjectId) === String(subjectId));
+    if (chapterId)    questions = questions.filter((q) => String(q.chapterId) === String(chapterId));
+    if (topicId)      questions = questions.filter((q) => String(q.topicId) === String(topicId));
+    if (difficulty)   questions = questions.filter((q) => q.difficulty === difficulty);
     if (questionType) questions = questions.filter((q) => q.questionType === questionType);
-    if (model)        questions = questions.filter((q) => q.modelUsed     === model);
+    if (model)        questions = questions.filter((q) => q.modelUsed === model);
     if (search) {
       const sq = search.toLowerCase();
       questions = questions.filter((q) => q.question?.toLowerCase().includes(sq));
@@ -64,6 +79,13 @@ router.get("/questions", requireAuth, async (req, res) => {
         return d <= to;
       });
     }
+
+    // Sort in memory by generatedAt descending (newest questions first)
+    questions.sort((a, b) => {
+      const timeA = a.generatedAt ? new Date(a.generatedAt).getTime() : (Number(a.id) || 0);
+      const timeB = b.generatedAt ? new Date(b.generatedAt).getTime() : (Number(b.id) || 0);
+      return timeB - timeA;
+    });
 
     const total = questions.length;
     let page_questions = questions.slice((pageNum - 1) * limitNum, pageNum * limitNum);
@@ -86,9 +108,105 @@ router.get("/questions", requireAuth, async (req, res) => {
     const enriched = await Promise.all(page_questions.map(enrichQuestion));
 
     res.json({ data: enriched, total, page: pageNum, limit: limitNum });
-  } catch (err) {
-    req.log.error({ err }, "List questions error");
-    res.status(500).json({ error: "Internal server error" });
+  } catch (err: any) {
+    req.log.error({ err, message: err?.message }, "List questions error");
+    res.status(500).json({ error: err?.message || "Internal server error" });
+  }
+});
+
+// ── Create Question (Manual Entry with LaTeX, Diagram & Options) ─────────────
+router.post("/questions", requireAuth, async (req, res) => {
+  try {
+    const caller = (req as any).user;
+    const {
+      question,
+      questionType = "mcq",
+      difficulty = "medium",
+      difficultyScore = 5,
+      marks = 1,
+      options,
+      correctAnswer,
+      explanation,
+      imageUrl,
+      boardId,
+      standardId,
+      subjectId,
+      chapterId,
+      topicId,
+      submitForApproval = false,
+    } = req.body;
+
+    if (!question || !question.trim()) {
+      return res.status(400).json({ error: "Question statement is required." });
+    }
+
+    const now = nowTs();
+    const qId = await nextId("questions");
+
+    const newQuestion = {
+      id: qId,
+      question: question.trim(),
+      questionType: questionType || "mcq",
+      difficulty: difficulty || "medium",
+      difficultyScore: Number(difficultyScore) || 5,
+      marks: marks !== undefined && marks !== null ? Number(marks) : 1,
+      options: options || null,
+      correctAnswer: correctAnswer ?? null,
+      explanation: explanation || null,
+      imageUrl: imageUrl || null,
+      boardId: boardId ? Number(boardId) : null,
+      standardId: standardId ? Number(standardId) : null,
+      subjectId: subjectId ? Number(subjectId) : null,
+      chapterId: chapterId ? Number(chapterId) : null,
+      topicId: topicId ? Number(topicId) : null,
+      createdBy: caller.userId,
+      createdByName: caller.email,
+      approvedBy: caller.role === "admin" || caller.role === "superadmin" ? caller.userId : null,
+      modelUsed: "manual_entry",
+      qualityScore: 10,
+      generatedAt: now,
+      updatedAt: now,
+    };
+
+    // If sub-admin wants or requires approval:
+    if (caller.role === "subadmin" && submitForApproval) {
+      const reqId = await nextId("approvalRequests");
+      await firestore.collection("approvalRequests").doc(String(reqId)).set({
+        id: reqId,
+        subAdminId: Number(caller.userId),
+        subAdminName: caller.email?.split("@")[0] || "Sub-Admin",
+        subAdminEmail: caller.email || "",
+        actionType: "CREATE_QUESTIONS",
+        entityType: "questions",
+        payload: {
+          questions: [newQuestion],
+          questionIds: [qId],
+        },
+        summary: `${caller.email} created new question manually (Pending Approval)`,
+        status: "pending",
+        createdAt: now,
+      });
+    }
+
+    // Save question to collection
+    await firestore.collection("questions").doc(String(qId)).set(newQuestion);
+
+    await logActivity({
+      userId: caller.userId,
+      userName: caller.email,
+      userEmail: caller.email,
+      userRole: caller.role,
+      action: "CREATE_QUESTION_MANUAL",
+      resource: "questions",
+      details: { questionId: qId, question: question.slice(0, 80), submitForApproval },
+      ipAddress: req.ip,
+    });
+
+    const enriched = await enrichQuestion(newQuestion);
+    res.status(201).json(enriched);
+  } catch (err: any) {
+    req.log?.error?.({ err }, "Create question error");
+    res.status(500).json({ error: err?.message || "Internal server error" });
   }
 });
 

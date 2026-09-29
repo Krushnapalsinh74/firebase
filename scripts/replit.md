@@ -5,7 +5,7 @@ AI-powered educational question generation admin panel for managing curriculum h
 ## Run & Operate
 
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 8080, proxied at `/api`)
-- `pnpm --filter @workspace/yunora-admin run dev` — run the admin frontend (port 25736, proxied at `/`)
+- `pnpm --filter @workspace/kpark-admin run dev` — run the admin frontend (port 25736, proxied at `/`)
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
@@ -29,7 +29,7 @@ AI-powered educational question generation admin panel for managing curriculum h
 - `lib/db/src/schema/index.ts` — Drizzle DB schema (all tables)
 - `lib/api-client-react/src/` — Generated React Query hooks + custom-fetch
 - `artifacts/api-server/src/routes/` — All backend route handlers
-- `artifacts/yunora-admin/src/` — React frontend (pages, hooks, components)
+- `artifacts/kpark-admin/src/` — React frontend (pages, hooks, components)
 
 ## Architecture decisions
 
