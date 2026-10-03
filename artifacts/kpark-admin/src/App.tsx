@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAppInit } from "@/hooks/use-app-init";
+import { useAuthStore } from "@/hooks/use-auth";
 import { AuthGuard } from "@/components/auth-guard";
 import { AppLayout } from "@/components/app-layout";
 import NotFound from "@/pages/not-found";
@@ -26,32 +27,59 @@ import SubAdminsPage from "@/pages/sub-admins";
 import ApprovalsPage from "@/pages/approvals";
 import ActivityLogsPage from "@/pages/activity-logs";
 import StudentAppPage from "@/pages/student-app";
+import { StudentLayout } from "@/student/components/student-layout";
+import StudentDashboard from "@/student/pages/StudentDashboard";
+import StudentCurriculum from "@/student/pages/StudentCurriculum";
+import StudentMockTests from "@/student/pages/StudentMockTests";
+import StudentLandingPage from "@/student/pages/StudentLandingPage";
+import StudentQuestionBank from "@/student/pages/StudentQuestionBank";
 
 const queryClient = new QueryClient();
 
+
+
 function ProtectedRoutes() {
+  const user = useAuthStore(s => s.user);
+  const isStudent = user?.role === 'student';
+
   return (
     <AuthGuard>
       <AppLayout>
         <Switch>
-          <Route path="/dashboard" component={DashboardPage} />
-          <Route path="/approvals" component={ApprovalsPage} />
-          <Route path="/sub-admins" component={SubAdminsPage} />
-          <Route path="/activity-logs" component={ActivityLogsPage} />
-          <Route path="/hierarchy" component={HierarchyPage} />
-          <Route path="/generate" component={GeneratePage} />
-          <Route path="/pdf-extractor" component={PdfExtractorPage} />
-          <Route path="/questions" component={QuestionsPage} />
-          <Route path="/jobs" component={JobsPage} />
-          <Route path="/providers" component={ProvidersPage} />
-          <Route path="/browser" component={BrowserPage} />
-          <Route path="/papers" component={PapersPage} />
-          <Route path="/analytics" component={AnalyticsPage} />
-          <Route path="/translate" component={TranslatePage} />
-          <Route path="/plans" component={PlansPage} />
-          <Route path="/students" component={StudentsPage} />
-          <Route path="/settings" component={SettingsPage} />
-          <Route component={NotFound} />
+          {isStudent ? (
+            <>
+              <Route path="/dashboard" component={StudentDashboard} />
+              <Route path="/curriculum" component={StudentCurriculum} />
+              <Route path="/tests" component={StudentMockTests} />
+              <Route path="/practice" component={StudentQuestionBank} />
+              <Route path="/performance" component={StudentDashboard} />
+              <Route path="/profile" component={StudentDashboard} />
+              <Route path="/" component={() => <Redirect to="/dashboard" replace />} />
+              <Route component={() => <Redirect to="/dashboard" replace />} />
+            </>
+          ) : (
+            <>
+              <Route path="/dashboard" component={DashboardPage} />
+              <Route path="/approvals" component={ApprovalsPage} />
+              <Route path="/sub-admins" component={SubAdminsPage} />
+              <Route path="/activity-logs" component={ActivityLogsPage} />
+              <Route path="/hierarchy" component={HierarchyPage} />
+              <Route path="/generate" component={GeneratePage} />
+              <Route path="/pdf-extractor" component={PdfExtractorPage} />
+              <Route path="/questions" component={QuestionsPage} />
+              <Route path="/jobs" component={JobsPage} />
+              <Route path="/providers" component={ProvidersPage} />
+              <Route path="/browser" component={BrowserPage} />
+              <Route path="/papers" component={PapersPage} />
+              <Route path="/analytics" component={AnalyticsPage} />
+              <Route path="/translate" component={TranslatePage} />
+              <Route path="/plans" component={PlansPage} />
+              <Route path="/students" component={StudentsPage} />
+              <Route path="/settings" component={SettingsPage} />
+              <Route path="/" component={() => <Redirect to="/dashboard" replace />} />
+              <Route component={NotFound} />
+            </>
+          )}
         </Switch>
       </AppLayout>
     </AuthGuard>
@@ -61,13 +89,7 @@ function ProtectedRoutes() {
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={() => <Redirect to="/dashboard" />} />
-      <Route path="/student" component={StudentAppPage} />
-      <Route path="/student/login" component={StudentAppPage} />
-      <Route path="/student/:rest*" component={StudentAppPage} />
-      <Route path="/portal" component={StudentAppPage} />
-      <Route path="/learn" component={StudentAppPage} />
-      <Route path="/practice" component={StudentAppPage} />
+      <Route path="/" component={StudentLandingPage} />
       <Route path="/login" component={LoginPage} />
       <Route path="/:rest*" component={ProtectedRoutes} />
     </Switch>

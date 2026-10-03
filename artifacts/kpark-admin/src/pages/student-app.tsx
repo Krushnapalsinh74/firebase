@@ -172,6 +172,14 @@ export default function StudentAppPage() {
     return () => unsubscribe();
   }, []);
 
+  // ── Redirect authenticated users to the new layout ──
+  const isStudentDomain = typeof window !== 'undefined' && window.location.hostname.includes('student');
+  useEffect(() => {
+    if (token && student && !authChecking) {
+      setLocation(isStudentDomain ? '/dashboard' : '/student/dashboard', { replace: true });
+    }
+  }, [token, student, authChecking, isStudentDomain, setLocation]);
+
   // ── Navigation Views ──
   const [currentView, setCurrentView] = useState<'curriculum' | 'chapter_view' | 'practice_quiz' | 'question_bank' | 'mock_tests'>('curriculum');
 
@@ -389,6 +397,10 @@ export default function StudentAppPage() {
     );
   }
 
+  if (token && student) {
+    return null;
+  }
+
   // ── Save Onboarding Selection ──
   const handleSaveOnboarding = () => {
     if (!tempBoardId || !tempStandardId) {
@@ -594,14 +606,6 @@ export default function StudentAppPage() {
               </Button>
             )}
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setLocation('/dashboard')}
-              className="h-8 text-xs gap-1 text-muted-foreground hover:text-foreground hidden sm:flex"
-            >
-              Admin Studio <ExternalLink className="h-3 w-3 ml-0.5" />
-            </Button>
           </div>
         </div>
       </header>

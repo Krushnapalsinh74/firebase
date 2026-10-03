@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { GraduationCap, Loader2, ShieldCheck, Mail, ArrowRight } from "lucide-react";
-import { signInWithPopup } from "firebase/auth";
+import { signInWithPopup, signInWithRedirect, getRedirectResult } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
 import { studentApi } from "../api/studentApi";
 import { useStudentStore } from "@/hooks/use-student-store";
@@ -16,6 +16,33 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [emailInput, setEmailInput] = useState("");
   const [nameInput, setNameInput] = useState("");
   const { setToken, setStudent } = useStudentStore();
+
+  React.useEffect(() => {
+    if (!auth) return;
+    // Check if we just came back from a Google Redirect
+    const checkRedirect = async () => {
+      try {
+        setLoading(true);
+        const result = await getRedirectResult(auth);
+        if (result && result.user) {
+          const fbUser = result.user;
+          const email = fbUser.email || "";
+          const name = fbUser.displayName || email.split("@")[0];
+          const photoUrl = fbUser.photoURL || null;
+          if (email) {
+            await completeLogin(email, name, photoUrl);
+          }
+        }
+      } catch (e: any) {
+        console.error("Redirect auth error:", e);
+        setError("Sign-in failed. Please try again.");
+        setShowEmailForm(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+    checkRedirect();
+  }, []);
 
   const completeLogin = async (email: string, name: string, photoUrl: string | null = null) => {
     const res = await studentApi.loginGoogle({ email, name, photoUrl });
@@ -37,32 +64,28 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     setError(null);
     try {
       if (auth) {
-        // Trigger direct native Google Popup (Account Chooser)
-        const result = await signInWithPopup(auth, googleProvider);
-        const fbUser = result.user;
-        const email = fbUser.email || "";
-        const name = fbUser.displayName || email.split("@")[0];
-        const photoUrl = fbUser.photoURL || null;
-
-        if (!email) {
-          throw new Error("Could not retrieve email from Google session.");
+        // Try popup first
+        try {
+          const result = await signInWithPopup(auth, googleProvider);
+          const fbUser = result.user;
+          const email = fbUser.email || "";
+          const name = fbUser.displayName || email.split("@")[0];
+          const photoUrl = fbUser.photoURL || null;
+          
+          if (!email) throw new Error("Could not retrieve email.");
+          await completeLogin(email, name, photoUrl);
+        } catch (popupError: any) {
+          console.warn("Popup failed, falling back to redirect:", popupError);
+          // If popup is blocked or fails, automatically fallback to redirect
+          await signInWithRedirect(auth, googleProvider);
         }
-
-        await completeLogin(email, name, photoUrl);
       } else {
-        // Show inline form if Firebase Auth is unavailable
         setShowEmailForm(true);
         setLoading(false);
       }
     } catch (e: any) {
       console.error("Google Auth error:", e);
-      // If popup was blocked or closed or keys missing, gracefully show inline email form
-      if (e.code === "auth/popup-closed-by-user") {
-        setError("Sign-in popup was closed. Please try again.");
-      } else {
-        setShowEmailForm(true);
-      }
-    } finally {
+      setShowEmailForm(true);
       setLoading(false);
     }
   };
@@ -87,26 +110,26 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         {/* Brand Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 shadow-lg shadow-blue-500/20 mb-4">
             <GraduationCap className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-2xl font-extrabold text-white tracking-tight">Knowledge Park</h1>
-          <p className="text-slate-400 text-xs mt-1">NEET Preparation & Examination Portal</p>
+          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Knowledge Park</h1>
+          <p className="text-slate-600 text-xs mt-1">NEET Preparation & Examination Portal</p>
         </div>
 
         {/* Login Card */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-7 shadow-2xl space-y-6">
+        <div className="bg-white border border-slate-200 rounded-2xl p-7 shadow-xl space-y-6">
           <div className="text-center space-y-1">
-            <h2 className="text-base font-bold text-white">Student Sign In</h2>
-            <p className="text-slate-400 text-xs">Sign in with your Google account to access practice & mock exams.</p>
+            <h2 className="text-base font-bold text-slate-900">Student Sign In</h2>
+            <p className="text-slate-600 text-xs">Sign in with your Google account to access practice & mock exams.</p>
           </div>
 
           {error && (
-            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-red-400 text-xs text-center font-medium">
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-red-600 text-xs text-center font-medium">
               {error}
             </div>
           )}
@@ -115,10 +138,10 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
           <button
             onClick={handleGoogleLogin}
             disabled={loading}
-            className="w-full flex items-center justify-center gap-3 py-3.5 px-4 rounded-xl bg-white text-slate-900 font-bold text-sm hover:bg-slate-100 active:scale-[0.99] transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-md"
+            className="w-full flex items-center justify-center gap-3 py-3.5 px-4 rounded-xl bg-white border border-slate-300 text-slate-900 font-bold text-sm hover:bg-slate-50 active:scale-[0.99] transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
           >
             {loading ? (
-              <Loader2 className="w-4 h-4 animate-spin text-slate-700" />
+              <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
             ) : (
               <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -132,15 +155,15 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
           {/* Secondary Email Form Option if popup is skipped or manually requested */}
           {showEmailForm ? (
-            <form onSubmit={handleEmailSubmit} className="space-y-3 pt-2 border-t border-slate-800">
-              <div className="text-xs text-slate-400 font-medium">Or enter your email below:</div>
+            <form onSubmit={handleEmailSubmit} className="space-y-3 pt-2 border-t border-slate-200">
+              <div className="text-xs text-slate-600 font-medium">Or enter your email below:</div>
               <div>
                 <input
                   type="email"
                   placeholder="name@example.com"
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   required
                 />
               </div>
@@ -150,13 +173,13 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                   placeholder="Your Name (optional)"
                   value={nameInput}
                   onChange={(e) => setNameInput(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
               </div>
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5"
+                className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-blue-500/20"
               >
                 <span>Continue</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -167,7 +190,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
               <button
                 type="button"
                 onClick={() => setShowEmailForm(true)}
-                className="text-xs text-slate-400 hover:text-slate-200 underline transition-colors"
+                className="text-xs text-slate-600 hover:text-slate-900 underline transition-colors"
               >
                 Sign in with Email instead
               </button>
@@ -175,12 +198,12 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
           )}
 
           <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
             <span>Secure SSL Encrypted Sign-in</span>
           </div>
         </div>
 
-        <p className="text-center text-slate-600 text-[11px] mt-6">
+        <p className="text-center text-slate-500 text-[11px] mt-6">
           Knowledge Park Educational Services © 2025
         </p>
       </div>

@@ -21,7 +21,10 @@ import {
   MonitorPlay,
   UserCheck,
   CheckCircle2,
-  ScrollText
+  ScrollText,
+  BookOpen,
+  Award,
+  User
 } from 'lucide-react';
 import { useAuthStore } from '@/hooks/use-auth';
 import { useThemeStore } from '@/hooks/use-theme';
@@ -30,6 +33,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useQuery } from '@tanstack/react-query';
+import { StudentOnboardingDialog } from '@/student/components/StudentOnboardingDialog';
 
 interface NavItemDef {
   href: string;
@@ -60,6 +64,15 @@ const allNavItems: NavItemDef[] = [
   { href: '/settings', label: 'Settings', icon: Settings, superAdminOnly: true },
 ];
 
+const studentNavItems: NavItemDef[] = [
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/curriculum', label: 'My Curriculum', icon: BookOpen },
+  { href: '/tests', label: 'Mock Exams', icon: Award },
+  { href: '/practice', label: 'Practice Mode', icon: Layers },
+  { href: '/performance', label: 'Performance', icon: BarChart3 },
+  { href: '/profile', label: 'Profile Settings', icon: User },
+];
+
 function NavLinks() {
   const [location] = useLocation();
   const token = useAuthStore((s) => s.token);
@@ -83,13 +96,15 @@ function NavLinks() {
   const pendingCount = approvalsData?.pendingCount || 0;
 
   // Filter navigation items
-  const visibleNavItems = allNavItems.filter((item) => {
-    if (isSuperAdmin) return true;
-    if (item.superAdminOnly) return false;
-    if (item.href === '/dashboard' || item.href === '/approvals') return true;
-    if (item.permKey) return userPerms.includes(item.permKey);
-    return false;
-  });
+  const visibleNavItems = user?.role === 'student' 
+    ? studentNavItems 
+    : allNavItems.filter((item) => {
+        if (isSuperAdmin) return true;
+        if (item.superAdminOnly) return false;
+        if (item.href === '/dashboard' || item.href === '/approvals') return true;
+        if (item.permKey) return userPerms.includes(item.permKey);
+        return false;
+      });
 
   return (
     <div className="flex flex-col gap-1 w-full">
@@ -125,6 +140,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const handleLogout = () => {
     logout();
+    window.location.replace('/login');
   };
 
   return (
@@ -139,6 +155,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           {isSubAdmin && (
             <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 border-amber-500/30">
               Sub-Admin
+            </Badge>
+          )}
+          {user?.role === 'student' && (
+            <Badge variant="outline" className="text-[10px] bg-blue-500/10 text-blue-600 border-blue-500/30">
+              Student
             </Badge>
           )}
         </div>
@@ -178,7 +199,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="flex flex-col">
             <span className="font-bold tracking-tight text-base leading-tight">Knowledge Park</span>
             <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-              {isSubAdmin ? (
+              {user?.role === 'student' ? (
+                <Badge variant="outline" className="text-[9px] py-0 px-1 bg-blue-500/10 text-blue-600 border-blue-500/30">
+                  Student Portal
+                </Badge>
+              ) : isSubAdmin ? (
                 <Badge variant="outline" className="text-[9px] py-0 px-1 bg-amber-500/10 text-amber-600 border-amber-500/30">
                   Sub-Admin Mode
                 </Badge>
@@ -191,17 +216,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         
         <div className="flex-1 overflow-auto px-3 py-2 space-y-3">
           <NavLinks />
-          <div className="pt-2 border-t border-border/60">
-            <Link href="/student">
-              <Button
-                variant="outline"
-                className="w-full justify-start text-xs font-semibold bg-gradient-to-r from-primary/10 to-blue-500/10 text-primary border-primary/30 hover:bg-primary/20 gap-2 shadow-xs"
-              >
-                <Globe className="h-4 w-4 text-primary" />
-                <span>Open Student App</span>
-              </Button>
-            </Link>
-          </div>
         </div>
         
         <div className="mt-auto border-t p-4 flex flex-col gap-3">
@@ -229,6 +243,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       </main>
+      <StudentOnboardingDialog />
     </div>
   );
 }

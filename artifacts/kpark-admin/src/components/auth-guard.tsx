@@ -22,7 +22,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
   useEffect(() => {
     if (!token) {
-      setLocation('/login');
+      setLocation('/login', { replace: true });
     }
   }, [token, setLocation]);
 
@@ -30,7 +30,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
     if (isError) {
       // Token might be invalid
       useAuthStore.getState().logout();
-      setLocation('/login');
+      setLocation('/login', { replace: true });
     } else if (user) {
       setUser(user);
     }
